@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import api from '../api/axiosClient';
-import { CreditCard, Search, CheckCircle2, AlertCircle, Printer, RefreshCw, CheckSquare, Square } from 'lucide-react';
+import { CreditCard, Search, CheckCircle2, AlertCircle, Printer, RefreshCw, CheckSquare, Square, ShieldOff } from 'lucide-react';
 import Modal from '../components/common/Modal';
 import SinglePaymentReceipt from '../components/receipts/SinglePaymentReceipt';
 import Badge from '../components/common/Badge';
@@ -12,8 +12,9 @@ export default function SinglePayment() {
   const [memberDues, setMemberDues] = useState([]);
   const [duesLoading, setDuesLoading] = useState(false);
 
-  // Installment Selection state
+  // Installment Selection state & Penalty Waiver state
   const [selectedDueIds, setSelectedDueIds] = useState([]);
+  const [waivedDueIds, setWaivedDueIds] = useState([]);
 
   // Payment Form State
   const [paymentMode, setPaymentMode] = useState('CASH');
@@ -46,6 +47,7 @@ export default function SinglePayment() {
     setPayerName(member.fullName);
     setPayerMobile(member.mobileNumber || '');
     setSelectedDueIds([]);
+    setWaivedDueIds([]);
     setAmountRupees('');
     setDuesLoading(true);
     try {
@@ -71,11 +73,50 @@ export default function SinglePayment() {
     }
     setSelectedDueIds(updated);
 
-    // Sum amount of all selected installments (including 3+ months overdue penalty)
+    // Sum amount of all selected installments (considering waived penalties)
     const selected = memberDues.filter((d) => updated.includes(d._id));
     const total = selected.reduce((acc, d) => {
       const baseAmt = d.outstandingRupees || 0;
-      const penaltyAmt = d.isThreeMonthsOverdue ? (d.penaltyAmountRupees || 0) : 0;
+      const isWaived = waivedDueIds.includes(d._id);
+      const penaltyAmt = (d.isThreeMonthsOverdue && !isWaived) ? (d.penaltyAmountRupees || 0) : 0;
+      return acc + baseAmt + penaltyAmt;
+    }, 0);
+    setAmountRupees(total > 0 ? total : '');
+  };
+
+  // Toggle waiver for an individual due
+  const handleToggleWaiveDue = (dueId) => {
+    let updated;
+    if (waivedDueIds.includes(dueId)) {
+      updated = waivedDueIds.filter((id) => id !== dueId);
+    } else {
+      updated = [...waivedDueIds, dueId];
+    }
+    setWaivedDueIds(updated);
+
+    const selected = memberDues.filter((d) => selectedDueIds.includes(d._id));
+    const total = selected.reduce((acc, d) => {
+      const baseAmt = d.outstandingRupees || 0;
+      const isWaived = updated.includes(d._id);
+      const penaltyAmt = (d.isThreeMonthsOverdue && !isWaived) ? (d.penaltyAmountRupees || 0) : 0;
+      return acc + baseAmt + penaltyAmt;
+    }, 0);
+    setAmountRupees(total > 0 ? total : '');
+  };
+
+  // Toggle waive all penalties
+  const handleToggleWaiveAll = () => {
+    const overdueDueIds = memberDues.filter((d) => d.isThreeMonthsOverdue).map((d) => d._id);
+    const allCurrentlyWaived = overdueDueIds.length > 0 && overdueDueIds.every((id) => waivedDueIds.includes(id));
+
+    const updated = allCurrentlyWaived ? [] : overdueDueIds;
+    setWaivedDueIds(updated);
+
+    const selected = memberDues.filter((d) => selectedDueIds.includes(d._id));
+    const total = selected.reduce((acc, d) => {
+      const baseAmt = d.outstandingRupees || 0;
+      const isWaived = updated.includes(d._id);
+      const penaltyAmt = (d.isThreeMonthsOverdue && !isWaived) ? (d.penaltyAmountRupees || 0) : 0;
       return acc + baseAmt + penaltyAmt;
     }, 0);
     setAmountRupees(total > 0 ? total : '');
@@ -88,7 +129,8 @@ export default function SinglePayment() {
     setSelectedDueIds(allIds);
     const total = pendingDues.reduce((acc, d) => {
       const baseAmt = d.outstandingRupees || 0;
-      const penaltyAmt = d.isThreeMonthsOverdue ? (d.penaltyAmountRupees || 0) : 0;
+      const isWaived = waivedDueIds.includes(d._id);
+      const penaltyAmt = (d.isThreeMonthsOverdue && !isWaived) ? (d.penaltyAmountRupees || 0) : 0;
       return acc + baseAmt + penaltyAmt;
     }, 0);
     setAmountRupees(total > 0 ? total : '');
@@ -127,8 +169,10 @@ export default function SinglePayment() {
         paymentMode,
         amountRupees: Number(amountRupees),
         selectedDueIds,
+        waivedDueIds,
+        waivePenalty: waivedDueIds.length > 0 && selectedDueIds.every(id => waivedDueIds.includes(id)),
         referenceNumber,
-        remarks,
+        remarks: remarks ? remarks.trim() : '',
         chequeDetails: paymentMode === 'CHEQUE' ? chequeDetails : undefined
       };
 
@@ -153,7 +197,11 @@ export default function SinglePayment() {
   const selectedDuesList = memberDues.filter((d) => selectedDueIds.includes(d._id));
   const pendingDuesCount = memberDues.filter((d) => ['PENDING', 'PARTIAL', 'OVERDUE'].includes(d.status)).length;
   const baseSelectedTotal = selectedDuesList.reduce((acc, d) => acc + (d.outstandingRupees || 0), 0);
-  const penaltySelectedTotal = selectedDuesList.reduce((acc, d) => acc + (d.isThreeMonthsOverdue ? (d.penaltyAmountRupees || 0) : 0), 0);
+  const penaltySelectedTotal = selectedDuesList.reduce((acc, d) => {
+    const isWaived = waivedDueIds.includes(d._id);
+    return acc + (d.isThreeMonthsOverdue && !isWaived ? (d.penaltyAmountRupees || 0) : 0);
+  }, 0);
+  const waivedSelectedCount = selectedDuesList.filter((d) => d.isThreeMonthsOverdue && waivedDueIds.includes(d._id)).length;
   const hasPenaltySelected = penaltySelectedTotal > 0;
 
   return (
@@ -240,7 +288,25 @@ export default function SinglePayment() {
                   {pendingDuesCount > 0 && (
                     <div className="flex items-center justify-between text-[11px] px-1 text-slate-500">
                       <span>{pendingDuesCount} pending installment(s)</span>
-                      <div className="flex gap-2">
+                      <div className="flex items-center gap-2">
+                        {memberDues.some(d => d.isThreeMonthsOverdue) && (
+                          <>
+                            <button
+                              type="button"
+                              onClick={handleToggleWaiveAll}
+                              className={`font-bold hover:underline ${
+                                memberDues.filter(d => d.isThreeMonthsOverdue).every(d => waivedDueIds.includes(d._id))
+                                  ? 'text-emerald-700'
+                                  : 'text-rose-600'
+                              }`}
+                            >
+                              {memberDues.filter(d => d.isThreeMonthsOverdue).every(d => waivedDueIds.includes(d._id))
+                                ? '✓ All Penalties Waived'
+                                : 'Waive All Penalties (દંડ ના લેવો)'}
+                            </button>
+                            <span>•</span>
+                          </>
+                        )}
                         <button
                           type="button"
                           onClick={handleSelectAllDues}
@@ -266,7 +332,8 @@ export default function SinglePayment() {
                       const isSelected = selectedDueIds.includes(d._id);
                       const isDuePassed = d.isDuePassed;
                       const isThreeMonths = d.isThreeMonthsOverdue;
-                      const badgeStatus = isThreeMonths ? 'OVERDUE' : (isDuePassed ? 'DUE' : 'OPEN');
+                      const isWaived = waivedDueIds.includes(d._id);
+                      const badgeStatus = isWaived ? 'PAID' : (isThreeMonths ? 'OVERDUE' : (isDuePassed ? 'DUE' : 'OPEN'));
 
                       return (
                         <div
@@ -276,7 +343,7 @@ export default function SinglePayment() {
                             isSelected
                               ? 'bg-indigo-50 border-indigo-500 shadow-xs ring-1 ring-indigo-500'
                               : isThreeMonths
-                              ? 'bg-rose-50/50 border-rose-300 hover:border-rose-400'
+                              ? (isWaived ? 'bg-emerald-50/30 border-emerald-200 hover:border-emerald-300' : 'bg-rose-50/50 border-rose-300 hover:border-rose-400')
                               : isDuePassed
                               ? 'bg-amber-50/40 border-amber-200 hover:border-amber-300'
                               : 'bg-white border-slate-200 hover:border-slate-300 hover:bg-slate-50/50'
@@ -299,16 +366,40 @@ export default function SinglePayment() {
                                 )}
                               </p>
                               {isThreeMonths ? (
-                                <div className="space-y-0.5">
+                                <div className="space-y-1">
                                   <p className="text-[11px] text-rose-700 font-bold flex items-center gap-1.5 flex-wrap">
                                     <span>⚠️ Due Date: {new Date(d.dueDate).toLocaleDateString()}</span>
                                     <span className="bg-rose-100 text-rose-800 px-1.5 py-0.5 rounded text-[10px] font-extrabold uppercase">
                                       &gt; 3 Mo Overdue
                                     </span>
                                   </p>
-                                  <p className="text-[10px] text-rose-600 font-semibold">
-                                    {d.penaltyTitle || 'Late Penalty'}: +₹{d.penaltyAmountRupees?.toFixed(2)}
-                                  </p>
+
+                                  {/* Director Penalty Waiver Option */}
+                                  <div className="flex items-center gap-2 pt-0.5 flex-wrap" onClick={(e) => e.stopPropagation()}>
+                                    <label className={`inline-flex items-center gap-1.5 px-2 py-0.5 rounded text-[10px] font-bold border cursor-pointer select-none transition ${
+                                      isWaived
+                                        ? 'bg-emerald-50 text-emerald-800 border-emerald-300 shadow-2xs'
+                                        : 'bg-white text-slate-700 border-slate-300 hover:border-slate-400'
+                                    }`}>
+                                      <input
+                                        type="checkbox"
+                                        checked={isWaived}
+                                        onChange={() => handleToggleWaiveDue(d._id)}
+                                        className="h-3.5 w-3.5 text-emerald-600 rounded focus:ring-emerald-500 border-slate-300 cursor-pointer"
+                                      />
+                                      <span>{isWaived ? '✓ દંડ માફ છે (Penalty Waived)' : 'દંડ ના લેવો (Waive Penalty)'}</span>
+                                    </label>
+
+                                    {!isWaived ? (
+                                      <span className="text-[10px] text-rose-600 font-bold">
+                                        +₹{d.penaltyAmountRupees?.toFixed(2)} Penalty
+                                      </span>
+                                    ) : (
+                                      <span className="text-[10px] text-emerald-700 font-bold">
+                                        Penalty: ₹0.00
+                                      </span>
+                                    )}
+                                  </div>
                                 </div>
                               ) : isDuePassed ? (
                                 <p className="text-[11px] text-amber-700 font-semibold">
@@ -325,15 +416,15 @@ export default function SinglePayment() {
 
                           <div className="text-right shrink-0 space-y-0.5">
                             <p className="font-bold text-slate-900 font-mono text-sm">
-                              ₹{(isThreeMonths ? d.totalWithPenaltyRupees : d.outstandingRupees)?.toFixed(2)}
+                              ₹{(isThreeMonths && !isWaived ? d.totalWithPenaltyRupees : d.outstandingRupees)?.toFixed(2)}
                             </p>
                             {isThreeMonths && (
-                              <p className="text-[10px] text-slate-500 font-mono">
-                                (₹{d.outstandingRupees} + ₹{d.penaltyAmountRupees})
+                              <p className={`text-[10px] font-mono font-medium ${isWaived ? 'text-emerald-700' : 'text-slate-500'}`}>
+                                {isWaived ? '(Penalty: ₹0 Waived)' : `(₹${d.outstandingRupees} + ₹${d.penaltyAmountRupees})`}
                               </p>
                             )}
                             <div>
-                              <Badge status={badgeStatus} text={isThreeMonths ? '3+ MO OVERDUE' : undefined} />
+                              <Badge status={badgeStatus} text={isWaived ? 'PENALTY WAIVED' : (isThreeMonths ? '3+ MO OVERDUE' : undefined)} />
                             </div>
                           </div>
                         </div>
@@ -382,6 +473,11 @@ export default function SinglePayment() {
                           (Base: ₹{baseSelectedTotal.toFixed(2)} + Overdue Penalty: ₹{penaltySelectedTotal.toFixed(2)})
                         </p>
                       )}
+                      {waivedSelectedCount > 0 && !hasPenaltySelected && (
+                        <p className="text-[10px] text-emerald-700 font-mono font-bold">
+                          (Penalty Waived by Director: ₹0.00)
+                        </p>
+                      )}
                     </div>
                   </div>
 
@@ -389,40 +485,56 @@ export default function SinglePayment() {
                     <div className="p-2.5 bg-rose-50 border border-rose-200 rounded-lg text-rose-800 text-[11px] flex items-start gap-2">
                       <AlertCircle className="h-4 w-4 shrink-0 text-rose-600 mt-0.5" />
                       <div>
-                        <strong>Penalty Applicable (&gt; 3 Months Overdue):</strong> One or more selected installments have passed their due date by more than 3 months. A late payment penalty of ₹{penaltySelectedTotal.toFixed(2)} has been automatically calculated and included in the collection total.
+                        <strong>Penalty Applicable (&gt; 3 Months Overdue):</strong> A late payment penalty of ₹{penaltySelectedTotal.toFixed(2)} has been automatically calculated and included in the collection total. You can waive it anytime using the "દંડ ના લેવો" checkbox.
+                      </div>
+                    </div>
+                  )}
+
+                  {waivedSelectedCount > 0 && (
+                    <div className="p-2.5 bg-emerald-50 border border-emerald-200 rounded-lg text-emerald-800 text-[11px] flex items-start gap-2">
+                      <CheckCircle2 className="h-4 w-4 shrink-0 text-emerald-600 mt-0.5" />
+                      <div>
+                        <strong>Penalty Waived by Director:</strong> Late payment penalty waived for {waivedSelectedCount} installment(s). Only base amount will be collected.
                       </div>
                     </div>
                   )}
 
                   <div className="flex flex-wrap gap-1.5">
-                    {selectedDuesList.map((d) => (
-                      <span
-                        key={d._id}
-                        className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-white border text-[11px] shadow-2xs ${
-                          d.isThreeMonthsOverdue ? 'border-rose-300 text-rose-900' : 'border-indigo-200 text-indigo-900'
-                        }`}
-                      >
-                        <strong>
-                          {d.installmentId?.installmentTitle}
-                          {(d.financialYearId?.yearName || d.installmentId?.financialYearId?.yearName) && (
-                            <span className="ml-1 text-indigo-600 font-bold">
-                              ({d.financialYearId?.yearName || d.installmentId?.financialYearId?.yearName})
+                    {selectedDuesList.map((d) => {
+                      const isWaived = waivedDueIds.includes(d._id);
+                      return (
+                        <span
+                          key={d._id}
+                          className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-white border text-[11px] shadow-2xs ${
+                            d.isThreeMonthsOverdue
+                              ? (isWaived ? 'border-emerald-300 text-emerald-900 bg-emerald-50/30' : 'border-rose-300 text-rose-900')
+                              : 'border-indigo-200 text-indigo-900'
+                          }`}
+                        >
+                          <strong>
+                            {d.installmentId?.installmentTitle}
+                            {(d.financialYearId?.yearName || d.installmentId?.financialYearId?.yearName) && (
+                              <span className="ml-1 text-indigo-600 font-bold">
+                                ({d.financialYearId?.yearName || d.installmentId?.financialYearId?.yearName})
+                              </span>
+                            )}
+                          </strong>
+                          <Badge
+                            status={isWaived ? 'PAID' : (d.isThreeMonthsOverdue ? 'OVERDUE' : (d.isDuePassed ? 'DUE' : 'OPEN'))}
+                            text={isWaived ? 'PENALTY WAIVED' : (d.isThreeMonthsOverdue ? '3+ MO OVERDUE' : undefined)}
+                          />
+                          <span className="text-slate-300">|</span>
+                          <span className="font-mono font-bold">
+                            ₹{(d.isThreeMonthsOverdue && !isWaived ? d.totalWithPenaltyRupees : d.outstandingRupees)?.toFixed(2)}
+                          </span>
+                          {d.isThreeMonthsOverdue && (
+                            <span className={`text-[10px] font-semibold ${isWaived ? 'text-emerald-700' : 'text-rose-600'}`}>
+                              {isWaived ? '(Penalty: ₹0 Waived)' : `(incl. ₹${d.penaltyAmountRupees} penalty)`}
                             </span>
                           )}
-                        </strong>
-                        <Badge
-                          status={d.isThreeMonthsOverdue ? 'OVERDUE' : (d.isDuePassed ? 'DUE' : 'OPEN')}
-                          text={d.isThreeMonthsOverdue ? '3+ MO OVERDUE' : undefined}
-                        />
-                        <span className="text-slate-300">|</span>
-                        <span className="font-mono font-bold">
-                          ₹{(d.isThreeMonthsOverdue ? d.totalWithPenaltyRupees : d.outstandingRupees)?.toFixed(2)}
                         </span>
-                        {d.isThreeMonthsOverdue && (
-                          <span className="text-[10px] text-rose-600 font-semibold">(incl. ₹{d.penaltyAmountRupees} penalty)</span>
-                        )}
-                      </span>
-                    ))}
+                      );
+                    })}
                   </div>
                 </div>
               ) : (
