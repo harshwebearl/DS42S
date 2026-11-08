@@ -8,8 +8,10 @@ pnpm-debug.log*
 lerna-debug.log*
 
 node_modules
-dist
-dist-ssr
+# dist (commented so pre-built production files can be deployed directly to live servers)
+# dist
+# dist (commented so pre-built production files can be deployed directly to live servers)
+# dist-ssr
 *.local
 
 # Editor directories and files

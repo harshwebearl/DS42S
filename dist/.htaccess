@@ -1,0 +1,45 @@
+<IfModule mod_mime.c>
+  AddType application/javascript .js .mjs
+  AddType text/javascript .js .mjs
+  AddType text/css .css
+  AddType image/svg+xml .svg .svgz
+  AddType application/json .json
+  AddType font/woff .woff
+  AddType font/woff2 .woff2
+</IfModule>
+
+<IfModule mod_rewrite.c>
+  RewriteEngine On
+  RewriteBase /
+  
+  # Ensure assets are served directly with correct MIME
+  RewriteCond %{REQUEST_FILENAME} -f [OR]
+  RewriteCond %{REQUEST_FILENAME} -d
+  RewriteRule ^ - [L]
+
+  # Single Page Application fallback to index.html
+  RewriteRule ^ index.html [L]
+</IfModule>
+
+# Force correct content-type header for JS files
+<FilesMatch "\.(js|mjs)$">
+  <IfModule mod_headers.c>
+    Header set Content-Type "application/javascript; charset=UTF-8"
+  </IfModule>
+</FilesMatch>
+
+# Force correct content-type header for CSS files
+<FilesMatch "\.css$">
+  <IfModule mod_headers.c>
+    Header set Content-Type "text/css; charset=UTF-8"
+  </IfModule>
+</FilesMatch>
+
+# Prevent caching of index.html
+<Files "index.html">
+  <IfModule mod_headers.c>
+    Header set Cache-Control "no-cache, no-store, must-revalidate"
+    Header set Pragma "no-cache"
+    Header set Expires 0
+  </IfModule>
+</Files>
