@@ -37,6 +37,7 @@ export default function Members() {
   const [villageFilter, setVillageFilter] = useState('');
   const [statusFilter, setStatusFilter] = useState('');
   const [page, setPage] = useState(1);
+  const [limit, setLimit] = useState(25);
   const [totalPages, setTotalPages] = useState(1);
   const [total, setTotal] = useState(0);
 
@@ -87,7 +88,7 @@ export default function Members() {
           villageId: villageFilter,
           status: statusFilter,
           page,
-          limit: 15
+          limit
         }
       });
       setMembers(res.data.members || []);
@@ -100,13 +101,18 @@ export default function Members() {
     }
   };
 
+  const handleLimitChange = (newLimit) => {
+    setLimit(Number(newLimit));
+    setPage(1);
+  };
+
   useEffect(() => {
     fetchVillages();
   }, []);
 
   useEffect(() => {
     fetchMembers();
-  }, [search, villageFilter, statusFilter, page]);
+  }, [search, villageFilter, statusFilter, page, limit]);
 
   const openAddModal = () => {
     setEditingMember(null);
@@ -248,7 +254,10 @@ export default function Members() {
             type="text"
             placeholder="Search Member ID, Full Name, Mobile..."
             value={search}
-            onChange={(e) => setSearch(e.target.value)}
+            onChange={(e) => {
+              setSearch(e.target.value);
+              setPage(1);
+            }}
             className="w-full pl-9 pr-3 py-1.5 text-xs rounded-lg border border-slate-300 focus:ring-2 focus:ring-indigo-600"
           />
         </div>
@@ -256,7 +265,10 @@ export default function Members() {
         <div className="flex flex-wrap items-center gap-2">
           <select
             value={villageFilter}
-            onChange={(e) => setVillageFilter(e.target.value)}
+            onChange={(e) => {
+              setVillageFilter(e.target.value);
+              setPage(1);
+            }}
             className="text-xs rounded-lg border border-slate-300 px-3 py-1.5 bg-white text-slate-700"
           >
             <option value="">All Villages</option>
@@ -267,7 +279,10 @@ export default function Members() {
 
           <select
             value={statusFilter}
-            onChange={(e) => setStatusFilter(e.target.value)}
+            onChange={(e) => {
+              setStatusFilter(e.target.value);
+              setPage(1);
+            }}
             className="text-xs rounded-lg border border-slate-300 px-3 py-1.5 bg-white text-slate-700"
           >
             <option value="">All Statuses</option>
@@ -275,6 +290,21 @@ export default function Members() {
             <option value="INACTIVE">INACTIVE</option>
             <option value="DECEASED">DECEASED</option>
           </select>
+
+          {/* Page Size / Entry Count Selector */}
+          <div className="flex items-center gap-1.5 bg-slate-50 border border-slate-200 px-2.5 py-1 rounded-lg">
+            <span className="text-[11px] font-bold text-slate-500 whitespace-nowrap">Show:</span>
+            <select
+              value={limit}
+              onChange={(e) => handleLimitChange(e.target.value)}
+              className="text-xs font-bold rounded border border-slate-300 px-2 py-0.5 bg-white text-indigo-700 focus:ring-1 focus:ring-indigo-500"
+            >
+              <option value={25}>25 entries</option>
+              <option value={50}>50 entries</option>
+              <option value={75}>75 entries</option>
+              <option value={100}>100 entries</option>
+            </select>
+          </div>
         </div>
       </div>
 
@@ -347,8 +377,9 @@ export default function Members() {
           page={page}
           totalPages={totalPages}
           total={total}
-          limit={15}
+          limit={limit}
           onPageChange={setPage}
+          onLimitChange={handleLimitChange}
         />
       </div>
 
