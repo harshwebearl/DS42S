@@ -49,9 +49,11 @@ export default function SinglePayment() {
     setAmountRupees('');
     setDuesLoading(true);
     try {
-      const res = await api.get(`/installments/member/${member._id}/dues`);
-      const dues = res.data.dues || [];
-      setMemberDues(dues);
+      const res = await api.get(`/installments/member/${member._id}/dues?openOnly=true`);
+      const allDues = res.data.dues || [];
+      // Only show OPEN / UNPAID installments for payment collection
+      const payableDues = allDues.filter((d) => d.status !== 'PAID' && d.outstandingRupees > 0 && d.isOpen !== false);
+      setMemberDues(payableDues);
     } catch (err) {
       console.error(err);
     } finally {
@@ -251,24 +253,24 @@ export default function SinglePayment() {
                   <div className="space-y-2 max-h-64 overflow-y-auto pr-0.5">
                     {memberDues.map((d) => {
                       const isSelected = selectedDueIds.includes(d._id);
-                      const isPaid = d.status === 'PAID';
+                      const isDuePassed = d.isDuePassed;
+                      const badgeStatus = isDuePassed ? 'DUE' : 'OPEN';
 
                       return (
                         <div
                           key={d._id}
-                          onClick={() => !isPaid && handleToggleDue(d._id)}
-                          className={`p-3 rounded-lg border text-xs transition cursor-pointer flex items-center justify-between gap-3 ${
-                            isPaid
-                              ? 'bg-slate-50 border-slate-200 opacity-60 cursor-not-allowed'
-                              : isSelected
+                          onClick={() => handleToggleDue(d._id)}
+                          className={`p-3 rounded-xl border text-xs transition cursor-pointer flex items-center justify-between gap-3 ${
+                            isSelected
                               ? 'bg-indigo-50 border-indigo-500 shadow-xs ring-1 ring-indigo-500'
+                              : isDuePassed
+                              ? 'bg-rose-50/30 border-rose-200 hover:border-rose-300'
                               : 'bg-white border-slate-200 hover:border-slate-300 hover:bg-slate-50/50'
                           }`}
                         >
                           <div className="flex items-center gap-2.5 min-w-0">
                             <input
                               type="checkbox"
-                              disabled={isPaid}
                               checked={isSelected}
                               onChange={() => handleToggleDue(d._id)}
                               className="h-4 w-4 rounded text-indigo-600 focus:ring-indigo-500 border-slate-300 cursor-pointer shrink-0"
@@ -277,17 +279,23 @@ export default function SinglePayment() {
                               <p className={`font-bold truncate ${isSelected ? 'text-indigo-900' : 'text-slate-800'}`}>
                                 {d.installmentId?.installmentTitle || 'Installment'}
                               </p>
-                              <p className="text-[10px] text-slate-400">
-                                Due Date: {new Date(d.dueDate).toLocaleDateString()}
+                              <p className={`text-[11px] ${isDuePassed ? 'text-rose-600 font-bold' : 'text-slate-500'}`}>
+                                {isDuePassed ? (
+                                  <span>⚠️ Due Date Passed: {new Date(d.dueDate).toLocaleDateString()}</span>
+                                ) : (
+                                  <span>Due Date: {new Date(d.dueDate).toLocaleDateString()}</span>
+                                )}
                               </p>
                             </div>
                           </div>
 
-                          <div className="text-right shrink-0">
-                            <p className="font-bold text-rose-600 font-mono text-xs">
+                          <div className="text-right shrink-0 space-y-0.5">
+                            <p className="font-bold text-slate-900 font-mono text-sm">
                               ₹{d.outstandingRupees?.toFixed(2)}
                             </p>
-                            <Badge status={d.status} />
+                            <div>
+                              <Badge status={badgeStatus} />
+                            </div>
                           </div>
                         </div>
                       );
@@ -334,11 +342,12 @@ export default function SinglePayment() {
                     {selectedDuesList.map((d) => (
                       <span
                         key={d._id}
-                        className="inline-flex items-center gap-1 px-2.5 py-1 rounded-md bg-white border border-indigo-200 text-indigo-900 font-medium text-[11px] shadow-2xs"
+                        className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-white border border-indigo-200 text-indigo-900 font-medium text-[11px] shadow-2xs"
                       >
                         <strong>{d.installmentId?.installmentTitle}</strong>
-                        <span className="text-slate-400">|</span>
-                        <span className="text-rose-600 font-mono font-bold">₹{d.outstandingRupees}</span>
+                        <Badge status={d.isDuePassed ? 'DUE' : 'OPEN'} />
+                        <span className="text-slate-300">|</span>
+                        <span className="text-indigo-700 font-mono font-bold">₹{d.outstandingRupees}</span>
                       </span>
                     ))}
                   </div>
