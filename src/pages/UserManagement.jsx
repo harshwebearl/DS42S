@@ -252,6 +252,8 @@ export default function UserManagement() {
 
   const activeCount = users.filter((u) => u.isActive).length;
   const inactiveCount = users.filter((u) => !u.isActive).length;
+  const adminCount = users.filter((u) => u.role === 'SYSTEM_ADMIN' || u.role === 'SUPER_ADMIN').length;
+  const directorCount = users.filter((u) => u.role === 'DIRECTOR').length;
 
   return (
     <div className="space-y-6">
@@ -260,10 +262,10 @@ export default function UserManagement() {
         <div>
           <h1 className="text-xl font-black text-slate-900 tracking-tight flex items-center gap-2">
             <Users className="h-6 w-6 text-indigo-600" />
-            Director & User Management
+            System Admin & User Management
           </h1>
           <p className="text-xs text-slate-500 mt-1">
-            Manage authorized Directors who can login to the CRM console with their Name, Login Email ID, and Password.
+            Manage System Administrators and Directors who can login to the CRM console with their Name, Login Email ID, and Password.
           </p>
         </div>
         <button
@@ -271,7 +273,7 @@ export default function UserManagement() {
           className="inline-flex items-center gap-2 px-4 py-2.5 rounded-lg bg-indigo-600 text-white text-xs font-bold hover:bg-indigo-700 shadow-sm transition"
         >
           <UserPlus className="h-4 w-4" />
-          Add New Director
+          Add New User / Admin
         </button>
       </div>
 
@@ -291,34 +293,44 @@ export default function UserManagement() {
       )}
 
       {/* Metric Cards */}
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-4 gap-4">
         <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-2xs flex items-center gap-3">
           <div className="p-3 bg-indigo-50 text-indigo-600 rounded-xl">
             <Users className="h-5 w-5" />
           </div>
           <div>
-            <p className="text-xs font-medium text-slate-500">Total Directors</p>
+            <p className="text-xs font-medium text-slate-500">Total Users</p>
             <p className="text-lg font-black text-slate-900">{users.length}</p>
           </div>
         </div>
 
         <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-2xs flex items-center gap-3">
-          <div className="p-3 bg-emerald-50 text-emerald-600 rounded-xl">
+          <div className="p-3 bg-purple-50 text-purple-600 rounded-xl">
             <ShieldCheck className="h-5 w-5" />
           </div>
           <div>
-            <p className="text-xs font-medium text-slate-500">Active Directors</p>
-            <p className="text-lg font-black text-emerald-600">{activeCount}</p>
+            <p className="text-xs font-medium text-slate-500">System Admins</p>
+            <p className="text-lg font-black text-purple-600">{adminCount}</p>
           </div>
         </div>
 
         <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-2xs flex items-center gap-3">
-          <div className="p-3 bg-amber-50 text-amber-600 rounded-xl">
+          <div className="p-3 bg-blue-50 text-blue-600 rounded-xl">
+            <Users className="h-5 w-5" />
+          </div>
+          <div>
+            <p className="text-xs font-medium text-slate-500">Directors</p>
+            <p className="text-lg font-black text-blue-600">{directorCount}</p>
+          </div>
+        </div>
+
+        <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-2xs flex items-center gap-3">
+          <div className="p-3 bg-emerald-50 text-emerald-600 rounded-xl">
             <Power className="h-5 w-5" />
           </div>
           <div>
-            <p className="text-xs font-medium text-slate-500">Inactive / Suspended</p>
-            <p className="text-lg font-black text-amber-600">{inactiveCount}</p>
+            <p className="text-xs font-medium text-slate-500">Active Accounts</p>
+            <p className="text-lg font-black text-emerald-600">{activeCount}</p>
           </div>
         </div>
       </div>
@@ -404,9 +416,21 @@ export default function UserManagement() {
                                 </span>
                               )}
                             </div>
-                            <span className="text-[10px] text-slate-400 font-mono">
-                              Role: {user.role || 'DIRECTOR'}
-                            </span>
+                            <div className="flex items-center gap-1 mt-0.5">
+                              {user.role === 'SYSTEM_ADMIN' || user.role === 'SUPER_ADMIN' ? (
+                                <span className="text-[9px] bg-purple-100 text-purple-800 border border-purple-200 font-extrabold px-1.5 py-0.5 rounded uppercase">
+                                  SYSTEM ADMIN
+                                </span>
+                              ) : user.role === 'MANAGER' ? (
+                                <span className="text-[9px] bg-emerald-100 text-emerald-800 border border-emerald-200 font-bold px-1.5 py-0.5 rounded uppercase">
+                                  MANAGER
+                                </span>
+                              ) : (
+                                <span className="text-[9px] bg-blue-100 text-blue-800 border border-blue-200 font-bold px-1.5 py-0.5 rounded uppercase">
+                                  DIRECTOR
+                                </span>
+                              )}
+                            </div>
                           </div>
                         </div>
                       </td>
@@ -589,14 +613,29 @@ export default function UserManagement() {
             </div>
           </div>
 
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+            <div>
+              <label className="block font-bold text-slate-700 mb-1">
+                System Role <span className="text-rose-500">*</span>
+              </label>
+              <select
+                value={form.role}
+                onChange={(e) => setForm({ ...form, role: e.target.value })}
+                className="w-full px-3 py-2 rounded-lg border border-slate-300 bg-white font-medium"
+              >
+                <option value="SYSTEM_ADMIN">System Admin (Full Access)</option>
+                <option value="DIRECTOR">Director</option>
+                <option value="MANAGER">Manager</option>
+              </select>
+            </div>
+
             <div>
               <label className="block font-bold text-slate-700 mb-1">
                 Designation
               </label>
               <input
                 type="text"
-                placeholder="e.g. Director, Trustee, President"
+                placeholder="e.g. System Administrator, Director"
                 value={form.designation}
                 onChange={(e) => setForm({ ...form, designation: e.target.value })}
                 className="w-full px-3 py-2 rounded-lg border border-slate-300 focus:outline-none focus:ring-1 focus:ring-indigo-500"
@@ -612,8 +651,8 @@ export default function UserManagement() {
                 onChange={(e) => setForm({ ...form, isActive: e.target.value === 'ACTIVE' })}
                 className="w-full px-3 py-2 rounded-lg border border-slate-300 bg-white font-medium"
               >
-                <option value="ACTIVE">ACTIVE (Authorized to login)</option>
-                <option value="INACTIVE">INACTIVE (Access blocked)</option>
+                <option value="ACTIVE">ACTIVE (Can login)</option>
+                <option value="INACTIVE">INACTIVE (Blocked)</option>
               </select>
             </div>
           </div>

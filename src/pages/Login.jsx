@@ -5,8 +5,8 @@ import { Shield, Lock, Mail, AlertCircle, KeyRound, CheckCircle2 } from 'lucide-
 import api from '../api/axiosClient';
 
 export default function Login() {
-  const [email, setEmail] = useState('director@ds24g.org');
-  const [password, setPassword] = useState('Director@2026');
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
 
@@ -100,7 +100,7 @@ export default function Login() {
             <form onSubmit={handleLogin} className="space-y-5">
               <div>
                 <label className="block text-xs font-bold uppercase tracking-wider text-slate-700">
-                  Director Email
+                  Login Email ID
                 </label>
                 <div className="mt-1 relative rounded-lg shadow-xs">
                   <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-slate-400">
@@ -111,8 +111,8 @@ export default function Login() {
                     required
                     value={email}
                     onChange={(e) => setEmail(e.target.value)}
-                    className="block w-full pl-9 pr-3 py-2.5 sm:text-xs rounded-lg border border-slate-300 focus:ring-2 focus:ring-indigo-600 focus:border-indigo-600"
-                    placeholder="director@ds24g.org"
+                    className="block w-full pl-9 pr-3 py-2.5 sm:text-xs rounded-lg border border-slate-300 focus:ring-2 focus:ring-indigo-600 focus:border-indigo-600 font-medium"
+                    placeholder="name@ds24g.org"
                   />
                 </div>
               </div>
@@ -139,8 +139,8 @@ export default function Login() {
                     required
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}
-                    className="block w-full pl-9 pr-3 py-2.5 sm:text-xs rounded-lg border border-slate-300 focus:ring-2 focus:ring-indigo-600 focus:border-indigo-600"
-                    placeholder="••••••••"
+                    className="block w-full pl-9 pr-3 py-2.5 sm:text-xs rounded-lg border border-slate-300 focus:ring-2 focus:ring-indigo-600 focus:border-indigo-600 font-mono"
+                    placeholder="Enter Password"
                   />
                 </div>
               </div>
@@ -152,14 +152,8 @@ export default function Login() {
                   className="w-full flex justify-center items-center gap-2 py-2.5 px-4 border border-transparent rounded-lg shadow-sm text-xs font-bold text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-hidden focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 transition disabled:opacity-50"
                 >
                   <Shield className="h-4 w-4" />
-                  {loading ? 'Authenticating Director...' : 'Secure Director Login'}
+                  {loading ? 'Authenticating...' : 'Sign In to Portal'}
                 </button>
-              </div>
-
-              <div className="text-center pt-2">
-                <p className="text-[11px] text-slate-500">
-                  Initial Seed Credentials: <span className="font-mono text-slate-700 font-bold">director@ds24g.org</span> / <span className="font-mono text-slate-700 font-bold">Director@2026</span>
-                </p>
               </div>
             </form>
           ) : (
