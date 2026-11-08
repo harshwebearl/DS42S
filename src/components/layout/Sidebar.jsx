@@ -1,5 +1,6 @@
 import React from 'react';
 import { NavLink } from 'react-router-dom';
+import { useAuth } from '../../context/AuthContext';
 import {
   LayoutDashboard,
   MapPin,
@@ -16,7 +17,8 @@ import {
   FileCheck2,
   BarChart3,
   Settings,
-  ShieldAlert
+  ShieldAlert,
+  UserCog
 } from 'lucide-react';
 
 const navItems = [
@@ -34,10 +36,12 @@ const navItems = [
   { name: 'Death Claims', path: '/death-claims', icon: HeartCrack },
   { name: 'Claim Cheques', path: '/claim-cheques', icon: FileCheck2 },
   { name: 'Reports & Export', path: '/reports', icon: BarChart3 },
+  { name: 'User Management', path: '/users', icon: UserCog },
   { name: 'Settings & Audit', path: '/settings', icon: Settings },
 ];
 
 export default function Sidebar({ isOpen, onClose }) {
+  const { director } = useAuth();
   return (
     <>
       {/* Mobile overlay */}
@@ -106,14 +110,15 @@ export default function Sidebar({ isOpen, onClose }) {
         {/* Director Profile Badge at Bottom */}
         <div className="p-3 border-t border-slate-800 bg-slate-950/60">
           <div className="flex items-center gap-3 px-2 py-1.5">
-            <div className="h-8 w-8 rounded-full bg-indigo-500/20 border border-indigo-400/30 flex items-center justify-center text-indigo-300 font-bold text-xs">
-              DIR
+            <div className="h-8 w-8 rounded-full bg-indigo-500/20 border border-indigo-400/30 flex items-center justify-center text-indigo-300 font-bold text-xs uppercase shrink-0">
+              {director?.name ? director.name.charAt(0) : 'D'}
             </div>
             <div className="truncate">
-              <p className="text-xs font-semibold text-white truncate">Authorized Director</p>
-              <p className="text-[10px] text-emerald-400 flex items-center gap-1 font-medium">
-                <span className="h-1.5 w-1.5 rounded-full bg-emerald-400 animate-pulse" />
-                Active Session
+              <p className="text-xs font-semibold text-white truncate">
+                {director?.name || 'Authorized Director'}
+              </p>
+              <p className="text-[10px] text-slate-400 truncate font-mono">
+                {director?.email || 'director@ds24g.org'}
               </p>
             </div>
           </div>

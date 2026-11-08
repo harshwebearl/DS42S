@@ -59,7 +59,18 @@ export default function Header({ onMenuClick }) {
             Bulk Cheque Pay
           </button>
 
-          <div className="h-6 w-px bg-slate-200 mx-1" />
+          {/* Currently logged-in Director Pill */}
+          <div className="hidden lg:flex items-center gap-2 px-3 py-1 bg-slate-50 border border-slate-200 rounded-lg">
+            <div className="h-6 w-6 rounded-full bg-indigo-600 text-white font-bold text-[10px] flex items-center justify-center uppercase shrink-0">
+              {director?.name ? director.name.charAt(0) : 'D'}
+            </div>
+            <div className="text-left leading-none max-w-[150px]">
+              <p className="text-xs font-bold text-slate-800 truncate">{director?.name || 'Director'}</p>
+              <p className="text-[10px] text-slate-400 truncate font-mono mt-0.5">{director?.email || 'director@ds24g.org'}</p>
+            </div>
+          </div>
+
+          <div className="h-6 w-px bg-slate-200 mx-1 hidden sm:block" />
 
           {/* Logout button */}
           <button

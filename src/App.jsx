@@ -22,6 +22,7 @@ import DeathClaims from './pages/DeathClaims';
 import ClaimCheques from './pages/ClaimCheques';
 import Reports from './pages/Reports';
 import Settings from './pages/Settings';
+import UserManagement from './pages/UserManagement';
 
 function ProtectedRoute({ children }) {
   const { isAuthenticated, loading } = useAuth();
@@ -70,6 +71,7 @@ export default function App() {
             <Route path="death-claims" element={<DeathClaims />} />
             <Route path="claim-cheques" element={<ClaimCheques />} />
             <Route path="reports" element={<Reports />} />
+            <Route path="users" element={<UserManagement />} />
             <Route path="settings" element={<Settings />} />
           </Route>
 

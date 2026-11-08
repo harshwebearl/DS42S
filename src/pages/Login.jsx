@@ -83,7 +83,7 @@ export default function Login() {
           Suraksha Samiti — Director CRM System
         </p>
         <p className="text-xs text-slate-400 mt-2">
-          Authorized Director Single Sign-In Console
+          Authorized Directors Portal & Sign-In Console
         </p>
       </div>
 
