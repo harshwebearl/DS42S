@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import api from '../api/axiosClient';
-import { Plus, Search, Edit2, Trash2, Power, MapPin, AlertCircle } from 'lucide-react';
+import { Plus, Search, Edit2, Trash2, Power, MapPin, AlertCircle, CheckCircle2, X } from 'lucide-react';
 import Modal from '../components/common/Modal';
 import Badge from '../components/common/Badge';
 
@@ -9,6 +9,7 @@ export default function Villages() {
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState('');
+  const [feedbackMsg, setFeedbackMsg] = useState({ type: '', text: '' });
 
   // Modal state
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -76,12 +77,18 @@ export default function Villages() {
     setSubmitting(true);
     try {
       if (editingVillage) {
-        await api.put(`/villages/${editingVillage._id}`, formData);
+        const res = await api.put(`/villages/${editingVillage._id}`, formData);
+        const updated = res.data.village;
+        if (updated) {
+          setVillages(prev => prev.map(v => v._id === updated._id ? { ...v, ...updated } : v));
+        }
+        setFeedbackMsg({ type: 'success', text: `Village "${updated?.name || formData.name}" updated successfully.` });
       } else {
-        await api.post('/villages', formData);
+        const res = await api.post('/villages', formData);
+        setFeedbackMsg({ type: 'success', text: `Village "${res.data?.village?.name || formData.name}" created successfully.` });
       }
       setIsModalOpen(false);
-      fetchVillages();
+      await fetchVillages();
     } catch (err) {
       setModalError(err.response?.data?.message || 'Error saving village.');
     } finally {
@@ -91,8 +98,13 @@ export default function Villages() {
 
   const handleToggleStatus = async (id) => {
     try {
-      await api.patch(`/villages/${id}/toggle-status`);
-      fetchVillages();
+      const res = await api.patch(`/villages/${id}/toggle-status`);
+      const updated = res.data.village;
+      if (updated) {
+        setVillages(prev => prev.map(v => v._id === id ? { ...v, ...updated } : v));
+      }
+      setFeedbackMsg({ type: 'success', text: `Village status changed to ${updated?.status || 'updated'}.` });
+      await fetchVillages();
     } catch (err) {
       alert(err.response?.data?.message || 'Failed to toggle status');
     }
@@ -106,7 +118,9 @@ export default function Villages() {
     if (window.confirm(`Are you sure you want to delete "${v.name}"?`)) {
       try {
         await api.delete(`/villages/${v._id}`);
-        fetchVillages();
+        setVillages(prev => prev.filter(item => item._id !== v._id));
+        setFeedbackMsg({ type: 'success', text: `Village "${v.name}" deleted successfully.` });
+        await fetchVillages();
       } catch (err) {
         alert(err.response?.data?.message || 'Error deleting village');
       }
@@ -134,6 +148,30 @@ export default function Villages() {
           Add Village
         </button>
       </div>
+
+      {/* Dismissible Feedback Message */}
+      {feedbackMsg.text && (
+        <div className={`p-4 rounded-xl border flex items-center justify-between text-xs font-semibold ${
+          feedbackMsg.type === 'error'
+            ? 'bg-rose-50 border-rose-200 text-rose-800'
+            : 'bg-emerald-50 border-emerald-200 text-emerald-800'
+        }`}>
+          <div className="flex items-center gap-2">
+            {feedbackMsg.type === 'error' ? (
+              <AlertCircle className="h-4 w-4 text-rose-600 shrink-0" />
+            ) : (
+              <CheckCircle2 className="h-4 w-4 text-emerald-600 shrink-0" />
+            )}
+            <span>{feedbackMsg.text}</span>
+          </div>
+          <button
+            onClick={() => setFeedbackMsg({ type: '', text: '' })}
+            className="text-slate-400 hover:text-slate-600"
+          >
+            <X className="h-4 w-4" />
+          </button>
+        </div>
+      )}
 
       {/* Filters and Search Bar */}
       <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-2xs flex flex-col sm:flex-row gap-3 items-center justify-between">
