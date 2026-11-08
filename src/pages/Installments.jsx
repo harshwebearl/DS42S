@@ -9,7 +9,9 @@ import {
   CheckCircle2,
   TrendingUp,
   Clock,
-  Edit2
+  Edit2,
+  Trash2,
+  X
 } from 'lucide-react';
 import Modal from '../components/common/Modal';
 import Badge from '../components/common/Badge';
@@ -19,6 +21,7 @@ export default function Installments() {
   const [selectedYearId, setSelectedYearId] = useState('');
   const [installments, setInstallments] = useState([]);
   const [loading, setLoading] = useState(false);
+  const [feedbackMsg, setFeedbackMsg] = useState({ type: '', text: '' });
 
   // Add / Edit Modal
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -110,15 +113,35 @@ export default function Installments() {
     try {
       if (editingInst) {
         await api.put(`/installments/${editingInst._id}`, formData);
+        setFeedbackMsg({ type: 'success', text: `Installment "${formData.installmentTitle}" updated successfully.` });
       } else {
         await api.post('/installments', formData);
+        setFeedbackMsg({ type: 'success', text: `Installment "${formData.installmentTitle}" created successfully.` });
       }
       setIsModalOpen(false);
-      fetchInstallments();
+      await fetchInstallments();
     } catch (err) {
       setModalError(err.response?.data?.message || 'Error saving installment.');
     } finally {
       setSubmitting(false);
+    }
+  };
+
+  // Delete Installment
+  const handleDeleteInstallment = async (inst) => {
+    if (!window.confirm(`Are you sure you want to permanently delete "${inst.installmentTitle}"?`)) {
+      return;
+    }
+    try {
+      const res = await api.delete(`/installments/${inst._id}`);
+      setInstallments((prev) => prev.filter((i) => i._id !== inst._id));
+      setFeedbackMsg({
+        type: 'success',
+        text: res.data?.message || `Installment "${inst.installmentTitle}" deleted successfully.`
+      });
+      await fetchInstallments();
+    } catch (err) {
+      alert(err.response?.data?.message || 'Error deleting installment');
     }
   };
 
@@ -132,7 +155,7 @@ export default function Installments() {
     try {
       const res = await api.post(`/installments/${inst._id}/generate-dues`);
       setGenMessage(res.data.message);
-      fetchInstallments();
+      await fetchInstallments();
     } catch (err) {
       alert(err.response?.data?.message || 'Error generating dues');
     } finally {
@@ -164,6 +187,30 @@ export default function Installments() {
           Add Installment
         </button>
       </div>
+
+      {/* Dismissible Feedback Message */}
+      {feedbackMsg.text && (
+        <div className={`p-4 rounded-xl border flex items-center justify-between text-xs font-semibold ${
+          feedbackMsg.type === 'error'
+            ? 'bg-rose-50 border-rose-200 text-rose-800'
+            : 'bg-emerald-50 border-emerald-200 text-emerald-800'
+        }`}>
+          <div className="flex items-center gap-2">
+            {feedbackMsg.type === 'error' ? (
+              <AlertCircle className="h-4 w-4 text-rose-600 shrink-0" />
+            ) : (
+              <CheckCircle2 className="h-4 w-4 text-emerald-600 shrink-0" />
+            )}
+            <span>{feedbackMsg.text}</span>
+          </div>
+          <button
+            onClick={() => setFeedbackMsg({ type: '', text: '' })}
+            className="text-slate-400 hover:text-slate-600"
+          >
+            <X className="h-4 w-4" />
+          </button>
+        </div>
+      )}
 
       {/* Year Selector */}
       <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-2xs flex flex-col sm:flex-row gap-4 items-center justify-between">
@@ -252,6 +299,13 @@ export default function Installments() {
                       title="Edit Installment"
                     >
                       <Edit2 className="h-4 w-4" />
+                    </button>
+                    <button
+                      onClick={() => handleDeleteInstallment(inst)}
+                      className="p-1.5 rounded-lg text-slate-500 hover:text-rose-600 hover:bg-rose-50 transition"
+                      title="Delete Installment"
+                    >
+                      <Trash2 className="h-4 w-4" />
                     </button>
                   </div>
                 </div>

@@ -525,11 +525,14 @@ export default function BulkPayment() {
                     className="px-2 py-1 text-xs rounded-lg border border-slate-300 bg-white"
                   >
                     <option value="">Choose Installment...</option>
-                    {activeInstallments.map((inst) => (
-                      <option key={inst._id} value={inst._id}>
-                        {inst.installmentTitle} (₹{inst.installmentAmountRupees})
-                      </option>
-                    ))}
+                    {activeInstallments.map((inst) => {
+                      const yr = inst.financialYearId?.yearName;
+                      return (
+                        <option key={inst._id} value={inst._id}>
+                          {inst.installmentTitle} {yr ? `(${yr})` : ''} (₹{inst.amountRupees || inst.installmentAmountRupees})
+                        </option>
+                      );
+                    })}
                   </select>
                   <button
                     type="button"
@@ -599,11 +602,14 @@ export default function BulkPayment() {
                                   : 'border-indigo-200 bg-indigo-50/40 text-slate-800'
                               }`}
                             >
-                              {row.dues.map((d) => (
-                                <option key={d._id} value={d._id}>
-                                  {d.installmentId?.installmentTitle || 'Installment'} — ₹{d.outstandingRupees} {d.isThreeMonthsOverdue ? `(+₹${d.penaltyAmountRupees} Overdue Penalty)` : ''}
-                                </option>
-                              ))}
+                              {row.dues.map((d) => {
+                                const yr = d.financialYearId?.yearName || d.installmentId?.financialYearId?.yearName;
+                                return (
+                                  <option key={d._id} value={d._id}>
+                                    {d.installmentId?.installmentTitle || 'Installment'} {yr ? `(${yr})` : ''} — ₹{d.outstandingRupees} {d.isThreeMonthsOverdue ? `(+₹${d.penaltyAmountRupees} Overdue Penalty)` : ''}
+                                  </option>
+                                );
+                              })}
                             </select>
 
                             {/* Show Due Date & Overdue 3 Months status */}

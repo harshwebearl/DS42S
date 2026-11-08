@@ -290,8 +290,13 @@ export default function SinglePayment() {
                               className="h-4 w-4 rounded text-indigo-600 focus:ring-indigo-500 border-slate-300 cursor-pointer shrink-0"
                             />
                             <div className="min-w-0 space-y-0.5">
-                              <p className={`font-bold truncate ${isSelected ? 'text-indigo-900' : 'text-slate-800'}`}>
-                                {d.installmentId?.installmentTitle || 'Installment'}
+                              <p className={`font-bold truncate flex items-center gap-1.5 flex-wrap ${isSelected ? 'text-indigo-900' : 'text-slate-800'}`}>
+                                <span>{d.installmentId?.installmentTitle || 'Installment'}</span>
+                                {(d.financialYearId?.yearName || d.installmentId?.financialYearId?.yearName) && (
+                                  <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-indigo-50 text-indigo-700 border border-indigo-200">
+                                    {d.financialYearId?.yearName || d.installmentId?.financialYearId?.yearName}
+                                  </span>
+                                )}
                               </p>
                               {isThreeMonths ? (
                                 <div className="space-y-0.5">
@@ -397,7 +402,14 @@ export default function SinglePayment() {
                           d.isThreeMonthsOverdue ? 'border-rose-300 text-rose-900' : 'border-indigo-200 text-indigo-900'
                         }`}
                       >
-                        <strong>{d.installmentId?.installmentTitle}</strong>
+                        <strong>
+                          {d.installmentId?.installmentTitle}
+                          {(d.financialYearId?.yearName || d.installmentId?.financialYearId?.yearName) && (
+                            <span className="ml-1 text-indigo-600 font-bold">
+                              ({d.financialYearId?.yearName || d.installmentId?.financialYearId?.yearName})
+                            </span>
+                          )}
+                        </strong>
                         <Badge
                           status={d.isThreeMonthsOverdue ? 'OVERDUE' : (d.isDuePassed ? 'DUE' : 'OPEN')}
                           text={d.isThreeMonthsOverdue ? '3+ MO OVERDUE' : undefined}
