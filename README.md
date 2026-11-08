@@ -1,22 +1,31 @@
 # DS42S
 
-### Shree Dashashremali 42 Gnati Suraksha Samiti — Frontend Application
+Frontend client for **Shree Dashashremali 42 Gnati Suraksha Samiti CRM System**.
 
-Modern React + Vite + Tailwind CSS frontend interface for the Director CRM.
+Built with **React 19**, **Vite**, and **Tailwind CSS**.
 
-#### Features:
-- Director Login & Session Authentication
-- Interactive Director Dashboard with Financial KPIs
-- Village Master CRUD
-- Member / Family Head Management with Identity Masking (Aadhaar & PAN)
-- Nominee & Beneficiary Share Management
-- Dynamic Year-wise Installments & Member Dues Generation
-- Penalty Master & Audit-Recorded Waivers
-- Single Payment Collection (Cash, UPI, Bank Transfer, Cheque) & Printable Receipts
-- Bulk / Group Payment Allocation with Equal Split and Custom Distribution
-- Cheque Clearance Lifecycle (Received, Deposited, Cleared, Bounced)
-- Member Financial Ledger with Verified Running Balance
-- Death Claim Management with Strict 100% Cleared Dues Verification
-- Claim Cheque Issue, Handover, and Disbursement Tracking
-- 15 Financial & Census Reports with Excel (.xlsx) & Print Support
-- Director Audit Trail Viewer
+## Features
+- Complete Director CRM Console
+- Real-time Dashboard with Financial KPIs
+- Village Master & Member Registry with Aadhaar/PAN masking
+- Nominee & Beneficiary Management with Share validation
+- Dynamic Year-Wise Installment Management
+- Single Member Payment Collection & Receipt Generation
+- Critical Bulk / Group Cheque Allocation with Equal Split & Custom Distribution
+- Cheque Clearance Lifecycle (Received -> Deposited -> Cleared -> Bounced)
+- Member Financial Running Ledgers & Printable Statements
+- Death Claim Eligibility Calculation & Director Approval
+- Claim Cheque Issue, Handover & Disbursement Tracking
+- 15 Comprehensive Reports with Real Excel (.xlsx) & Print Export
+
+## Setup & Running
+```bash
+npm install
+npm run dev
+```
+Runs at `http://localhost:5173` with proxy to backend on port 5000.
+
+## Build
+```bash
+npm run build
+```
