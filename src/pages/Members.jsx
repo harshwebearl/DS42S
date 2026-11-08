@@ -19,7 +19,10 @@ import {
   Phone,
   Mail,
   MapPin,
-  Upload
+  Upload,
+  ArrowUp,
+  ArrowDown,
+  ArrowUpDown
 } from 'lucide-react';
 import Modal from '../components/common/Modal';
 import Badge from '../components/common/Badge';
@@ -36,6 +39,8 @@ export default function Members() {
   const [search, setSearch] = useState('');
   const [villageFilter, setVillageFilter] = useState('');
   const [statusFilter, setStatusFilter] = useState('');
+  const [sortBy, setSortBy] = useState('memberId');
+  const [sortOrder, setSortOrder] = useState('asc'); // By default ascending order!
   const [page, setPage] = useState(1);
   const [limit, setLimit] = useState(25);
   const [totalPages, setTotalPages] = useState(1);
@@ -87,6 +92,8 @@ export default function Members() {
           search,
           villageId: villageFilter,
           status: statusFilter,
+          sortBy,
+          sortOrder,
           page,
           limit
         }
@@ -106,13 +113,23 @@ export default function Members() {
     setPage(1);
   };
 
+  const handleSort = (field) => {
+    if (sortBy === field) {
+      setSortOrder((prev) => (prev === 'asc' ? 'desc' : 'asc'));
+    } else {
+      setSortBy(field);
+      setSortOrder('asc'); // Default to ascending when switching field
+    }
+    setPage(1);
+  };
+
   useEffect(() => {
     fetchVillages();
   }, []);
 
   useEffect(() => {
     fetchMembers();
-  }, [search, villageFilter, statusFilter, page, limit]);
+  }, [search, villageFilter, statusFilter, sortBy, sortOrder, page, limit]);
 
   const openAddModal = () => {
     setEditingMember(null);
@@ -291,6 +308,56 @@ export default function Members() {
             <option value="DECEASED">DECEASED</option>
           </select>
 
+          {/* Sorting Filter: Ascending / Descending with default Ascending */}
+          <div className="flex items-center gap-1.5 bg-slate-50 border border-slate-200 px-2.5 py-1 rounded-lg">
+            <ArrowUpDown className="h-3.5 w-3.5 text-indigo-600 shrink-0" />
+            <span className="text-[11px] font-bold text-slate-500 whitespace-nowrap">ક્રમ / Order:</span>
+            <select
+              value={`${sortBy}:${sortOrder}`}
+              onChange={(e) => {
+                const [f, o] = e.target.value.split(':');
+                setSortBy(f);
+                setSortOrder(o);
+                setPage(1);
+              }}
+              className="text-xs font-semibold rounded border border-slate-300 px-2 py-0.5 bg-white text-slate-800 focus:ring-1 focus:ring-indigo-500"
+            >
+              <option value="memberId:asc">Member ID: ચડતો ક્રમ (Ascending) [Default]</option>
+              <option value="memberId:desc">Member ID: ઉતરતો ક્રમ (Descending)</option>
+              <option value="fullName:asc">નામ (A → Z): ચડતો ક્રમ (Ascending)</option>
+              <option value="fullName:desc">નામ (Z → A): ઉતરતો ક્રમ (Descending)</option>
+              <option value="joiningDate:asc">જોડાણ તારીખ: જૂની થી નવી (Ascending)</option>
+              <option value="joiningDate:desc">જોડાણ તારીખ: નવી થી જૂની (Descending)</option>
+            </select>
+
+            {/* Quick Toggle Button between Asc and Desc */}
+            <button
+              type="button"
+              onClick={() => {
+                setSortOrder((prev) => (prev === 'asc' ? 'desc' : 'asc'));
+                setPage(1);
+              }}
+              className={`inline-flex items-center gap-1 px-2 py-0.5 rounded text-[11px] font-bold transition border cursor-pointer ${
+                sortOrder === 'asc'
+                  ? 'bg-indigo-50 text-indigo-700 border-indigo-200 hover:bg-indigo-100'
+                  : 'bg-amber-50 text-amber-800 border-amber-300 hover:bg-amber-100'
+              }`}
+              title={`હાલનો ક્રમ: ${sortOrder === 'asc' ? 'ચડતો ક્રમ (Ascending)' : 'ઉતરતો ક્રમ (Descending)'}. ક્લિક કરીને બદલો.`}
+            >
+              {sortOrder === 'asc' ? (
+                <>
+                  <ArrowUp className="h-3.5 w-3.5 text-indigo-600" />
+                  <span>Asc</span>
+                </>
+              ) : (
+                <>
+                  <ArrowDown className="h-3.5 w-3.5 text-amber-600" />
+                  <span>Desc</span>
+                </>
+              )}
+            </button>
+          </div>
+
           {/* Page Size / Entry Count Selector */}
           <div className="flex items-center gap-1.5 bg-slate-50 border border-slate-200 px-2.5 py-1 rounded-lg">
             <span className="text-[11px] font-bold text-slate-500 whitespace-nowrap">Show:</span>
@@ -314,8 +381,42 @@ export default function Members() {
           <table className="w-full text-left text-xs">
             <thead className="bg-slate-50 text-slate-700 font-bold border-b border-slate-200">
               <tr>
-                <th className="py-3 px-4">Member ID</th>
-                <th className="py-3 px-4">Full Name</th>
+                <th
+                  className="py-3 px-4 cursor-pointer hover:bg-slate-100 transition select-none group"
+                  onClick={() => handleSort('memberId')}
+                  title="Click to sort by Member ID (ચડતો / ઉતરતો ક્રમ)"
+                >
+                  <div className="flex items-center gap-1.5">
+                    <span>Member ID</span>
+                    {sortBy === 'memberId' ? (
+                      sortOrder === 'asc' ? (
+                        <ArrowUp className="h-3.5 w-3.5 text-indigo-600" />
+                      ) : (
+                        <ArrowDown className="h-3.5 w-3.5 text-amber-600" />
+                      )
+                    ) : (
+                      <ArrowUpDown className="h-3.5 w-3.5 text-slate-300 group-hover:text-slate-500" />
+                    )}
+                  </div>
+                </th>
+                <th
+                  className="py-3 px-4 cursor-pointer hover:bg-slate-100 transition select-none group"
+                  onClick={() => handleSort('fullName')}
+                  title="Click to sort by Full Name (A → Z / Z → A)"
+                >
+                  <div className="flex items-center gap-1.5">
+                    <span>Full Name</span>
+                    {sortBy === 'fullName' ? (
+                      sortOrder === 'asc' ? (
+                        <ArrowUp className="h-3.5 w-3.5 text-indigo-600" />
+                      ) : (
+                        <ArrowDown className="h-3.5 w-3.5 text-amber-600" />
+                      )
+                    ) : (
+                      <ArrowUpDown className="h-3.5 w-3.5 text-slate-300 group-hover:text-slate-500" />
+                    )}
+                  </div>
+                </th>
                 <th className="py-3 px-4">Village</th>
                 <th className="py-3 px-4">Mobile</th>
                 <th className="py-3 px-4">Masked Aadhaar</th>
