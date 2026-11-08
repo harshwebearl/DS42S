@@ -5,6 +5,16 @@
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Shree Dashashremali 42 Gnati Suraksha Samiti — CRM</title>
+    <script>
+      (function() {
+        var host = window.location.hostname;
+        var port = window.location.port;
+        var proto = window.location.protocol;
+        if (proto === 'file:' || ((host === 'localhost' || host === '127.0.0.1') && port !== '5000' && port !== '5173')) {
+          window.location.replace('http://localhost:5000');
+        }
+      })();
+    </script>
   </head>
   <body>
     <div id="root"></div>
