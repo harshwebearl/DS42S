@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import api from '../api/axiosClient';
+import api, { API_URL } from '../api/axiosClient';
 import {
   Users,
   Plus,
@@ -196,7 +196,7 @@ export default function Members() {
   };
 
   const handleExportExcel = () => {
-    window.open(`/api/reports/all-members/export-excel?villageId=${villageFilter}&status=${statusFilter}`, '_blank');
+    window.open(`${API_URL}/reports/all-members/export-excel?villageId=${villageFilter}&status=${statusFilter}`, '_blank');
   };
 
   return (

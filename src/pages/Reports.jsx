@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import api from '../api/axiosClient';
+import api, { API_URL } from '../api/axiosClient';
 import {
   BarChart3,
   FileSpreadsheet,
@@ -65,7 +65,7 @@ export default function Reports() {
 
   const handleExportExcel = () => {
     const token = localStorage.getItem('token');
-    window.open(`/api/reports/${activeReportId}/export-excel?villageId=${villageFilter}`, '_blank');
+    window.open(`${API_URL}/reports/${activeReportId}/export-excel?villageId=${villageFilter}`, '_blank');
   };
 
   const handlePrint = () => {
