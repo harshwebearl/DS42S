@@ -11,7 +11,8 @@ import {
   CreditCard,
   Building,
   Printer,
-  ArrowRight
+  ArrowRight,
+  Layers
 } from 'lucide-react';
 import Modal from '../components/common/Modal';
 import BulkPaymentReceipt from '../components/receipts/BulkPaymentReceipt';
@@ -20,6 +21,7 @@ import Badge from '../components/common/Badge';
 export default function BulkPayment() {
   const [allMembers, setAllMembers] = useState([]);
   const [villages, setVillages] = useState([]);
+  const [activeInstallments, setActiveInstallments] = useState([]);
   const [memberSearchQuery, setMemberSearchQuery] = useState('');
   const [selectedVillageFilter, setSelectedVillageFilter] = useState('');
 
@@ -38,8 +40,9 @@ export default function BulkPayment() {
   const [remarks, setRemarks] = useState('');
 
   // Selected Members Allocations Grid
-  // Array of { memberId, memberObj, amountRupees, notes }
+  // Array of { memberId, memberObj, dues, selectedDueId, amountRupees, notes }
   const [allocatedRows, setAllocatedRows] = useState([]);
+  const [bulkInstallmentToApply, setBulkInstallmentToApply] = useState('');
 
   // Modals & Feedback
   const [receipt, setReceipt] = useState(null);
@@ -50,16 +53,17 @@ export default function BulkPayment() {
   useEffect(() => {
     Promise.all([
       api.get('/members?limit=200'),
-      api.get('/villages')
-    ]).then(([memRes, vilRes]) => {
+      api.get('/villages'),
+      api.get('/installments')
+    ]).then(([memRes, vilRes, instRes]) => {
       setAllMembers(memRes.data.members || []);
       setVillages(vilRes.data.villages || []);
+      setActiveInstallments(instRes.data.installments || []);
     });
   }, []);
 
   // Filter members available to add
   const availableMembers = allMembers.filter((m) => {
-    // Exclude already added
     if (allocatedRows.some((r) => r.memberId === m._id)) return false;
     if (selectedVillageFilter && m.villageId?._id !== selectedVillageFilter && m.villageId !== selectedVillageFilter) {
       return false;
@@ -74,28 +78,75 @@ export default function BulkPayment() {
     return true;
   });
 
-  // Add Member to allocation grid
+  // Add Member to allocation grid with installment selection
   const handleAddMember = async (member) => {
-    // Fetch member's outstanding balance
-    let duesInfo = null;
+    let duesInfo = [];
     try {
       const res = await api.get(`/installments/member/${member._id}/dues`);
-      duesInfo = res.data.dues || [];
+      duesInfo = (res.data.dues || []).filter((d) => ['PENDING', 'PARTIAL', 'OVERDUE'].includes(d.status));
     } catch (e) {
       console.error(e);
     }
 
-    const pendingTotal = duesInfo ? duesInfo.reduce((acc, d) => acc + (d.outstandingRupees || 0), 0) : 0;
+    const firstDue = duesInfo.length > 0 ? duesInfo[0] : null;
+    const initialAmount = firstDue ? firstDue.outstandingRupees : (duesInfo.length === 0 ? 0 : 1000);
+    const pendingTotal = duesInfo.reduce((acc, d) => acc + (d.outstandingRupees || 0), 0);
 
     const newRow = {
       memberId: member._id,
       memberObj: member,
+      dues: duesInfo,
+      selectedDueId: firstDue ? firstDue._id : '',
       pendingTotal,
-      amountRupees: pendingTotal > 0 ? pendingTotal : 1000,
+      amountRupees: initialAmount > 0 ? initialAmount : '',
       notes: ''
     };
 
     setAllocatedRows([...allocatedRows, newRow]);
+  };
+
+  // Change installment selection for an individual row
+  const handleRowDueChange = (memberId, dueId) => {
+    setAllocatedRows(
+      allocatedRows.map((r) => {
+        if (r.memberId === memberId) {
+          const matchedDue = r.dues.find((d) => d._id === dueId);
+          const newAmt = matchedDue ? matchedDue.outstandingRupees : r.amountRupees;
+          return {
+            ...r,
+            selectedDueId: dueId,
+            amountRupees: newAmt
+          };
+        }
+        return r;
+      })
+    );
+  };
+
+  // Apply a specific installment to all added members in one click
+  const handleApplyInstallmentToAll = () => {
+    if (!bulkInstallmentToApply) {
+      alert('Please choose an installment from the dropdown first.');
+      return;
+    }
+
+    const updated = allocatedRows.map((r) => {
+      // Find if this member has a pending due for this installment
+      const matchingDue = r.dues.find(
+        (d) => d.installmentId?._id === bulkInstallmentToApply || d.installmentId === bulkInstallmentToApply
+      );
+
+      if (matchingDue) {
+        return {
+          ...r,
+          selectedDueId: matchingDue._id,
+          amountRupees: matchingDue.outstandingRupees
+        };
+      }
+      return r;
+    });
+
+    setAllocatedRows(updated);
   };
 
   // Remove row
@@ -198,6 +249,7 @@ export default function BulkPayment() {
         allocations: allocatedRows.map((r) => ({
           memberId: r.memberId,
           amountRupees: parseFloat(r.amountRupees),
+          selectedDueIds: r.selectedDueId ? [r.selectedDueId] : [],
           notes: r.notes || `Bulk allocation for ${r.memberObj.fullName}`
         }))
       };
@@ -208,7 +260,7 @@ export default function BulkPayment() {
       // Reset form
       setAllocatedRows([]);
     } catch (err) {
-      setErrorMsg(err.response?.data?.message || 'Error processing bulk payment');
+      setErrorMsg(err.response?.data?.message || 'Error executing bulk allocation transaction.');
     } finally {
       setSubmitting(false);
     }
@@ -216,12 +268,9 @@ export default function BulkPayment() {
 
   return (
     <div className="space-y-6">
-      {/* Page Header */}
+      {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
-          <div className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-amber-100 text-amber-800 border border-amber-200 mb-1">
-            Critical Society Financial Module
-          </div>
           <h1 className="text-xl font-black text-slate-900 tracking-tight flex items-center gap-2">
             <Users2 className="h-6 w-6 text-indigo-600" />
             Bulk / Group Payment Allocation
@@ -418,14 +467,16 @@ export default function BulkPayment() {
                 className="p-2.5 hover:bg-indigo-50/60 cursor-pointer text-xs flex items-center justify-between transition group"
               >
                 <div>
-                  <p className="font-bold text-slate-900 group-hover:text-indigo-700">{m.fullName}</p>
-                  <p className="text-[11px] text-slate-500 font-mono">
+                  <p className="font-bold text-slate-900 group-hover:text-indigo-600 transition">
+                    {m.fullName}
+                  </p>
+                  <p className="text-[10px] text-slate-400 font-mono">
                     {m.memberId} • {m.villageId?.name || '-'}
                   </p>
                 </div>
                 <button
                   type="button"
-                  className="px-2 py-1 bg-indigo-50 text-indigo-700 font-bold rounded group-hover:bg-indigo-600 group-hover:text-white transition flex items-center gap-1"
+                  className="px-2 py-1 text-[11px] font-bold rounded bg-indigo-50 text-indigo-600 group-hover:bg-indigo-600 group-hover:text-white transition flex items-center gap-1"
                 >
                   <Plus className="h-3 w-3" />
                   Add
@@ -438,7 +489,7 @@ export default function BulkPayment() {
           </div>
         </div>
 
-        {/* Right Column: Dynamic Member Allocation Grid (CRITICAL MATH WORKFLOW) */}
+        {/* Right Column: Dynamic Member Allocation Grid */}
         <div className="bg-white p-5 rounded-xl border border-slate-200 shadow-2xs lg:col-span-2 space-y-4">
           <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 pb-3 border-b border-slate-100">
             <div>
@@ -446,20 +497,48 @@ export default function BulkPayment() {
                 3. Member Allocations Grid ({allocatedRows.length} Members Selected)
               </h3>
               <p className="text-[11px] text-slate-400">
-                Sum of member allocations must match the Cheque amount down to the rupee.
+                Choose installment per member or set all to the same installment.
               </p>
             </div>
 
-            {/* EQUAL SPLIT ACTION BUTTON */}
-            <button
-              type="button"
-              onClick={handleEqualSplit}
-              disabled={allocatedRows.length === 0}
-              className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg bg-indigo-50 text-indigo-700 border border-indigo-200 font-bold text-xs hover:bg-indigo-100 shadow-2xs disabled:opacity-40 transition"
-            >
-              <Split className="h-3.5 w-3.5" />
-              Equal Split (₹{totalReceived > 0 && allocatedRows.length > 0 ? (totalReceived / allocatedRows.length).toFixed(2) : '0'}/member)
-            </button>
+            {/* QUICK ACTIONS: EQUAL SPLIT & BULK INSTALLMENT APPLIER */}
+            <div className="flex flex-wrap items-center gap-2">
+              {/* Apply Installment to All Selector */}
+              {activeInstallments.length > 0 && allocatedRows.length > 0 && (
+                <div className="flex items-center gap-1 text-xs">
+                  <select
+                    value={bulkInstallmentToApply}
+                    onChange={(e) => setBulkInstallmentToApply(e.target.value)}
+                    className="px-2 py-1 text-xs rounded-lg border border-slate-300 bg-white"
+                  >
+                    <option value="">Choose Installment...</option>
+                    {activeInstallments.map((inst) => (
+                      <option key={inst._id} value={inst._id}>
+                        {inst.installmentTitle} (₹{inst.installmentAmountRupees})
+                      </option>
+                    ))}
+                  </select>
+                  <button
+                    type="button"
+                    onClick={handleApplyInstallmentToAll}
+                    className="px-2.5 py-1 rounded-lg bg-slate-100 text-slate-700 border border-slate-300 font-bold text-xs hover:bg-slate-200"
+                  >
+                    Set All
+                  </button>
+                </div>
+              )}
+
+              {/* EQUAL SPLIT ACTION BUTTON */}
+              <button
+                type="button"
+                onClick={handleEqualSplit}
+                disabled={allocatedRows.length === 0}
+                className="inline-flex items-center gap-1.5 px-3 py-1 rounded-lg bg-indigo-50 text-indigo-700 border border-indigo-200 font-bold text-xs hover:bg-indigo-100 shadow-2xs disabled:opacity-40 transition"
+              >
+                <Split className="h-3.5 w-3.5" />
+                Equal Split
+              </button>
+            </div>
           </div>
 
           {/* Allocation Table */}
@@ -470,8 +549,8 @@ export default function BulkPayment() {
                   <th className="py-2.5 px-3">#</th>
                   <th className="py-2.5 px-3">Member Details</th>
                   <th className="py-2.5 px-3">Village</th>
-                  <th className="py-2.5 px-3 text-right">Pending Dues</th>
-                  <th className="py-2.5 px-3 text-right w-44">Allocated Amount (₹)</th>
+                  <th className="py-2.5 px-3 w-48">Installment Selection</th>
+                  <th className="py-2.5 px-3 text-right w-36">Amount (₹)</th>
                   <th className="py-2.5 px-3 text-center">Action</th>
                 </tr>
               </thead>
@@ -491,9 +570,26 @@ export default function BulkPayment() {
                         <p className="font-mono text-[10px] text-slate-500">{row.memberObj.memberId}</p>
                       </td>
                       <td className="py-2.5 px-3 text-slate-600 font-medium">{row.memberObj.villageId?.name || '-'}</td>
-                      <td className="py-2.5 px-3 text-right font-mono font-bold text-rose-600">
-                        ₹{row.pendingTotal.toFixed(2)}
+                      
+                      {/* Installment Selection Dropdown for each member */}
+                      <td className="py-2.5 px-3">
+                        {row.dues.length === 0 ? (
+                          <span className="text-slate-400 text-[11px] italic">No pending installments</span>
+                        ) : (
+                          <select
+                            value={row.selectedDueId}
+                            onChange={(e) => handleRowDueChange(row.memberId, e.target.value)}
+                            className="w-full px-2 py-1 text-xs rounded border border-indigo-200 bg-indigo-50/40 font-medium text-slate-800 focus:ring-1 focus:ring-indigo-500"
+                          >
+                            {row.dues.map((d) => (
+                              <option key={d._id} value={d._id}>
+                                {d.installmentId?.installmentTitle || 'Installment'} — ₹{d.outstandingRupees}
+                              </option>
+                            ))}
+                          </select>
+                        )}
                       </td>
+
                       <td className="py-2.5 px-3 text-right">
                         <input
                           type="number"
@@ -523,71 +619,82 @@ export default function BulkPayment() {
           </div>
 
           {/* REAL-TIME ALLOCATION TOTALS BAR */}
-          <div className="p-4 rounded-xl border bg-slate-50 border-slate-200 grid grid-cols-2 sm:grid-cols-4 gap-3 text-xs">
+          <div className="p-4 bg-slate-900 text-white rounded-xl grid grid-cols-2 sm:grid-cols-4 gap-4 text-xs font-mono">
             <div>
-              <span className="text-slate-500">Total Cheque Amount:</span>
-              <p className="font-black text-slate-900 text-sm font-mono">₹{totalReceived.toFixed(2)}</p>
+              <p className="text-[10px] text-slate-400 uppercase font-sans font-bold">Total Cheque</p>
+              <p className="text-base font-bold text-white mt-0.5">₹{totalReceived.toFixed(2)}</p>
             </div>
-
             <div>
-              <span className="text-slate-500">Total Allocated:</span>
-              <p className="font-black text-indigo-700 text-sm font-mono">₹{sumAllocated.toFixed(2)}</p>
+              <p className="text-[10px] text-slate-400 uppercase font-sans font-bold">Total Allocated</p>
+              <p className="text-base font-bold text-indigo-400 mt-0.5">₹{sumAllocated.toFixed(2)}</p>
             </div>
-
             <div>
-              <span className="text-slate-500">Remaining Unallocated:</span>
-              <p className={`font-black text-sm font-mono ${
-                remainingUnallocated === 0
-                  ? 'text-emerald-700'
-                  : 'text-rose-600'
-              }`}>
+              <p className="text-[10px] text-slate-400 uppercase font-sans font-bold">Remaining Diff</p>
+              <p className={`text-base font-bold mt-0.5 ${remainingUnallocated === 0 ? 'text-emerald-400' : 'text-rose-400'}`}>
                 ₹{remainingUnallocated.toFixed(2)}
               </p>
             </div>
-
             <div>
-              <span className="text-slate-500">Allocation Status:</span>
-              <div className="mt-0.5">
-                {isExactMatch ? (
-                  <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-bold bg-emerald-100 text-emerald-800">
-                    <CheckCircle2 className="h-3.5 w-3.5" />
-                    Exact 100% Match
+              <p className="text-[10px] text-slate-400 uppercase font-sans font-bold">Validation Status</p>
+              <div className="mt-1">
+                {allocatedRows.length === 0 ? (
+                  <span className="text-slate-400 text-[11px] font-sans">Awaiting Members</span>
+                ) : isExactMatch ? (
+                  <span className="inline-flex items-center gap-1 text-emerald-400 font-bold font-sans text-xs">
+                    <CheckCircle2 className="h-3.5 w-3.5" /> Balanced 100%
                   </span>
                 ) : (
-                  <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-bold bg-rose-100 text-rose-800">
-                    <AlertCircle className="h-3.5 w-3.5" />
-                    Difference: ₹{Math.abs(remainingUnallocated).toFixed(2)}
+                  <span className="inline-flex items-center gap-1 text-rose-400 font-bold font-sans text-xs">
+                    <AlertCircle className="h-3.5 w-3.5" /> Mismatch
                   </span>
                 )}
               </div>
             </div>
           </div>
 
-          {/* Posting Submission Action */}
-          <div className="pt-3 border-t border-slate-100 flex flex-col sm:flex-row items-center justify-between gap-3">
-            <p className="text-xs text-slate-500">
-              * Atomic database transaction ensures all {allocatedRows.length} member records are saved consistently or safely rolled back.
-            </p>
+          {/* Remarks and Post Transaction Button */}
+          <div className="space-y-3 pt-2">
+            <div>
+              <label className="block font-bold text-slate-700 mb-1 text-xs">Transaction Remarks / Notes</label>
+              <input
+                type="text"
+                value={remarks}
+                onChange={(e) => setRemarks(e.target.value)}
+                placeholder="e.g. Received from Kantilal Shah for 5 family members annual contribution"
+                className="w-full px-3 py-2 text-xs rounded-lg border border-slate-300"
+              />
+            </div>
 
             <button
               type="button"
               onClick={handleSubmit}
-              disabled={submitting || !isExactMatch}
-              className="w-full sm:w-auto px-6 py-2.5 bg-indigo-600 text-white rounded-lg font-bold text-xs hover:bg-indigo-700 shadow-md transition disabled:opacity-40"
+              disabled={!isExactMatch || submitting}
+              className="w-full py-3 px-4 rounded-xl font-black text-xs uppercase tracking-wider text-white transition flex items-center justify-center gap-2 cursor-pointer disabled:cursor-not-allowed bg-indigo-600 hover:bg-indigo-700 disabled:opacity-40 shadow-xs"
             >
-              {submitting ? 'Posting Bulk Transaction...' : 'Post Bulk Payment Voucher & Receipt'}
+              {submitting ? (
+                <>
+                  <CreditCard className="h-4 w-4 animate-spin" />
+                  <span>Processing Multi-Allocation Transaction...</span>
+                </>
+              ) : isExactMatch ? (
+                <>
+                  <CheckCircle2 className="h-4 w-4" />
+                  <span>Post Master Payment & Allocate ₹{totalReceived.toFixed(2)} to {allocatedRows.length} Members</span>
+                </>
+              ) : (
+                <span>⚠️ Balance Must Equal Cheque Amount (Diff: ₹{remainingUnallocated.toFixed(2)})</span>
+              )}
             </button>
           </div>
         </div>
       </div>
 
-      {/* Master Bulk Receipt Modal */}
+      {/* Printable Bulk Receipt Modal */}
       <Modal
         isOpen={isReceiptModalOpen}
         onClose={() => setIsReceiptModalOpen(false)}
-        title="Official Group / Bulk Payment Receipt"
-        subtitle="One Master Cheque Transaction linked to multiple member allocations."
-        maxWidth="max-w-2xl"
+        title="Official Group Payment Receipt"
+        size="2xl"
       >
         <BulkPaymentReceipt
           receipt={receipt}

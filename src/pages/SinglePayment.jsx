@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import api from '../api/axiosClient';
-import { CreditCard, Search, CheckCircle2, AlertCircle, Printer, RefreshCw } from 'lucide-react';
+import { CreditCard, Search, CheckCircle2, AlertCircle, Printer, RefreshCw, CheckSquare, Square } from 'lucide-react';
 import Modal from '../components/common/Modal';
 import SinglePaymentReceipt from '../components/receipts/SinglePaymentReceipt';
 import Badge from '../components/common/Badge';
@@ -11,6 +11,9 @@ export default function SinglePayment() {
   const [selectedMember, setSelectedMember] = useState(null);
   const [memberDues, setMemberDues] = useState([]);
   const [duesLoading, setDuesLoading] = useState(false);
+
+  // Installment Selection state
+  const [selectedDueIds, setSelectedDueIds] = useState([]);
 
   // Payment Form State
   const [paymentMode, setPaymentMode] = useState('CASH');
@@ -42,22 +45,49 @@ export default function SinglePayment() {
     setSelectedMember(member);
     setPayerName(member.fullName);
     setPayerMobile(member.mobileNumber || '');
+    setSelectedDueIds([]);
+    setAmountRupees('');
     setDuesLoading(true);
     try {
       const res = await api.get(`/installments/member/${member._id}/dues`);
       const dues = res.data.dues || [];
       setMemberDues(dues);
-
-      // Default amount to outstanding balance of pending dues
-      const pendingTotal = dues.reduce((acc, d) => acc + (d.outstandingRupees || 0), 0);
-      if (pendingTotal > 0) {
-        setAmountRupees(pendingTotal);
-      }
     } catch (err) {
       console.error(err);
     } finally {
       setDuesLoading(false);
     }
+  };
+
+  // Toggle single installment selection
+  const handleToggleDue = (dueId) => {
+    let updated;
+    if (selectedDueIds.includes(dueId)) {
+      updated = selectedDueIds.filter((id) => id !== dueId);
+    } else {
+      updated = [...selectedDueIds, dueId];
+    }
+    setSelectedDueIds(updated);
+
+    // Sum amount of all selected installments
+    const selected = memberDues.filter((d) => updated.includes(d._id));
+    const total = selected.reduce((acc, d) => acc + (d.outstandingRupees || 0), 0);
+    setAmountRupees(total > 0 ? total : '');
+  };
+
+  // Select all pending installments
+  const handleSelectAllDues = () => {
+    const pendingDues = memberDues.filter((d) => ['PENDING', 'PARTIAL', 'OVERDUE'].includes(d.status));
+    const allIds = pendingDues.map((d) => d._id);
+    setSelectedDueIds(allIds);
+    const total = pendingDues.reduce((acc, d) => acc + (d.outstandingRupees || 0), 0);
+    setAmountRupees(total > 0 ? total : '');
+  };
+
+  // Clear all selections
+  const handleClearSelection = () => {
+    setSelectedDueIds([]);
+    setAmountRupees('');
   };
 
   const handleSubmit = async (e) => {
@@ -66,6 +96,15 @@ export default function SinglePayment() {
       setErrorMsg('Please select a member first.');
       return;
     }
+    if (selectedDueIds.length === 0) {
+      setErrorMsg('Please select at least one installment to proceed with payment.');
+      return;
+    }
+    if (!amountRupees || Number(amountRupees) <= 0) {
+      setErrorMsg('Payment amount must be greater than zero.');
+      return;
+    }
+
     setErrorMsg('');
     setSubmitting(true);
 
@@ -77,6 +116,7 @@ export default function SinglePayment() {
         paymentDate,
         paymentMode,
         amountRupees: Number(amountRupees),
+        selectedDueIds,
         referenceNumber,
         remarks,
         chequeDetails: paymentMode === 'CHEQUE' ? chequeDetails : undefined
@@ -86,7 +126,7 @@ export default function SinglePayment() {
       setReceipt(res.data.receipt);
       setIsReceiptModalOpen(true);
 
-      // Refresh dues
+      // Refresh member dues
       handleSelectMember(selectedMember);
     } catch (err) {
       setErrorMsg(err.response?.data?.message || 'Error collecting payment');
@@ -100,6 +140,9 @@ export default function SinglePayment() {
     return m.fullName.toLowerCase().includes(q) || m.memberId.toLowerCase().includes(q);
   });
 
+  const selectedDuesList = memberDues.filter((d) => selectedDueIds.includes(d._id));
+  const pendingDuesCount = memberDues.filter((d) => ['PENDING', 'PARTIAL', 'OVERDUE'].includes(d.status)).length;
+
   return (
     <div className="space-y-6">
       {/* Page Header */}
@@ -109,15 +152,20 @@ export default function SinglePayment() {
           Single Member Payment Collection
         </h1>
         <p className="text-xs text-slate-500 mt-1">
-          Receive individual payments (Cash, UPI, Bank Transfer, Cheque) and auto-allocate against dues.
+          Select Member & Choose Installment(s) to automatically populate payment amount and issue official receipt.
         </p>
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        {/* Left Column: Search & Select Member */}
+        {/* Left Column: Search & Select Member + Installment Selection */}
         <div className="bg-white p-5 rounded-xl border border-slate-200 shadow-2xs space-y-4">
-          <h3 className="text-xs font-bold uppercase tracking-wider text-slate-500">
-            1. Select Member
+          <h3 className="text-xs font-bold uppercase tracking-wider text-slate-500 flex items-center justify-between">
+            <span>1. Select Member</span>
+            {selectedMember && (
+              <span className="text-[10px] text-emerald-600 font-bold bg-emerald-50 px-2 py-0.5 rounded-full">
+                Active Member
+              </span>
+            )}
           </h3>
 
           <div className="relative">
@@ -131,7 +179,7 @@ export default function SinglePayment() {
             />
           </div>
 
-          <div className="max-h-64 overflow-y-auto divide-y divide-slate-100 border border-slate-200 rounded-lg">
+          <div className="max-h-56 overflow-y-auto divide-y divide-slate-100 border border-slate-200 rounded-lg">
             {filteredMembers.slice(0, 10).map((m) => (
               <div
                 key={m._id}
@@ -149,44 +197,160 @@ export default function SinglePayment() {
             ))}
           </div>
 
-          {/* Member's outstanding dues review */}
+          {/* Member's Installments Selection Section */}
           {selectedMember && (
-            <div className="pt-3 border-t border-slate-100 space-y-2 text-xs">
-              <h4 className="font-bold text-slate-900">Current Outstanding Dues:</h4>
+            <div className="pt-4 border-t border-slate-200 space-y-3">
+              <div className="flex items-center justify-between">
+                <div>
+                  <h4 className="font-black text-slate-900 text-xs flex items-center gap-1.5">
+                    <span className="inline-block w-2 h-2 rounded-full bg-indigo-600"></span>
+                    2. Select Installment(s) to Pay
+                  </h4>
+                  <p className="text-[11px] text-slate-500">
+                    Payment amount calculates from selected installment(s).
+                  </p>
+                </div>
+              </div>
+
               {duesLoading ? (
-                <p className="text-slate-400">Loading dues...</p>
+                <div className="p-4 text-center text-xs text-slate-400 flex items-center justify-center gap-2">
+                  <RefreshCw className="h-4 w-4 animate-spin text-indigo-600" />
+                  <span>Loading installments...</span>
+                </div>
               ) : memberDues.length === 0 ? (
-                <p className="text-emerald-600 font-semibold">No unpaid dues recorded for this member.</p>
+                <div className="p-3 bg-emerald-50 border border-emerald-200 rounded-lg text-xs text-emerald-800 font-medium">
+                  ✓ No unpaid installments recorded for this member.
+                </div>
               ) : (
-                <div className="space-y-1.5 max-h-48 overflow-y-auto">
-                  {memberDues.map((d) => (
-                    <div key={d._id} className="p-2 bg-slate-50 rounded border border-slate-100 flex items-center justify-between">
-                      <div>
-                        <p className="font-bold text-slate-800">{d.installmentId?.installmentTitle}</p>
-                        <p className="text-[10px] text-slate-400">Due: {new Date(d.dueDate).toLocaleDateString()}</p>
-                      </div>
-                      <div className="text-right">
-                        <p className="font-bold text-rose-600 font-mono">₹{d.outstandingRupees}</p>
-                        <Badge status={d.status} />
+                <div className="space-y-2">
+                  {/* Select All / Clear action bar */}
+                  {pendingDuesCount > 0 && (
+                    <div className="flex items-center justify-between text-[11px] px-1 text-slate-500">
+                      <span>{pendingDuesCount} pending installment(s)</span>
+                      <div className="flex gap-2">
+                        <button
+                          type="button"
+                          onClick={handleSelectAllDues}
+                          className="font-bold text-indigo-600 hover:text-indigo-800 hover:underline"
+                        >
+                          Select All
+                        </button>
+                        <span>•</span>
+                        <button
+                          type="button"
+                          onClick={handleClearSelection}
+                          className="font-bold text-slate-500 hover:text-slate-700 hover:underline"
+                        >
+                          Clear
+                        </button>
                       </div>
                     </div>
-                  ))}
+                  )}
+
+                  {/* Installment cards */}
+                  <div className="space-y-2 max-h-64 overflow-y-auto pr-0.5">
+                    {memberDues.map((d) => {
+                      const isSelected = selectedDueIds.includes(d._id);
+                      const isPaid = d.status === 'PAID';
+
+                      return (
+                        <div
+                          key={d._id}
+                          onClick={() => !isPaid && handleToggleDue(d._id)}
+                          className={`p-3 rounded-lg border text-xs transition cursor-pointer flex items-center justify-between gap-3 ${
+                            isPaid
+                              ? 'bg-slate-50 border-slate-200 opacity-60 cursor-not-allowed'
+                              : isSelected
+                              ? 'bg-indigo-50 border-indigo-500 shadow-xs ring-1 ring-indigo-500'
+                              : 'bg-white border-slate-200 hover:border-slate-300 hover:bg-slate-50/50'
+                          }`}
+                        >
+                          <div className="flex items-center gap-2.5 min-w-0">
+                            <input
+                              type="checkbox"
+                              disabled={isPaid}
+                              checked={isSelected}
+                              onChange={() => handleToggleDue(d._id)}
+                              className="h-4 w-4 rounded text-indigo-600 focus:ring-indigo-500 border-slate-300 cursor-pointer shrink-0"
+                            />
+                            <div className="min-w-0">
+                              <p className={`font-bold truncate ${isSelected ? 'text-indigo-900' : 'text-slate-800'}`}>
+                                {d.installmentId?.installmentTitle || 'Installment'}
+                              </p>
+                              <p className="text-[10px] text-slate-400">
+                                Due Date: {new Date(d.dueDate).toLocaleDateString()}
+                              </p>
+                            </div>
+                          </div>
+
+                          <div className="text-right shrink-0">
+                            <p className="font-bold text-rose-600 font-mono text-xs">
+                              ₹{d.outstandingRupees?.toFixed(2)}
+                            </p>
+                            <Badge status={d.status} />
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
                 </div>
               )}
             </div>
           )}
         </div>
 
-        {/* Right Column: Payment Entry Form */}
+        {/* Right Column: Payment Particulars & Summary */}
         <div className="bg-white p-5 rounded-xl border border-slate-200 shadow-2xs lg:col-span-2 space-y-4">
           <h3 className="text-xs font-bold uppercase tracking-wider text-slate-500">
-            2. Payment Collection Particulars
+            3. Payment Collection Particulars
           </h3>
 
           {errorMsg && (
             <div className="p-3 bg-rose-50 border border-rose-200 rounded-lg text-xs text-rose-700 flex items-center gap-2">
               <AlertCircle className="h-4 w-4 shrink-0" />
               <span>{errorMsg}</span>
+            </div>
+          )}
+
+          {/* Selected Installments Overview Banner */}
+          {selectedMember && (
+            <div className={`p-4 rounded-xl border text-xs ${
+              selectedDueIds.length > 0
+                ? 'bg-indigo-50/70 border-indigo-200'
+                : 'bg-amber-50 border-amber-200 text-amber-800'
+            }`}>
+              {selectedDueIds.length > 0 ? (
+                <div className="space-y-2">
+                  <div className="flex items-center justify-between">
+                    <span className="font-bold text-indigo-900 flex items-center gap-1.5">
+                      <CheckCircle2 className="h-4 w-4 text-indigo-600" />
+                      Selected Installment(s) for Payment:
+                    </span>
+                    <span className="font-mono font-black text-indigo-700 text-sm">
+                      Total: ₹{Number(amountRupees || 0).toFixed(2)}
+                    </span>
+                  </div>
+                  <div className="flex flex-wrap gap-1.5">
+                    {selectedDuesList.map((d) => (
+                      <span
+                        key={d._id}
+                        className="inline-flex items-center gap-1 px-2.5 py-1 rounded-md bg-white border border-indigo-200 text-indigo-900 font-medium text-[11px] shadow-2xs"
+                      >
+                        <strong>{d.installmentId?.installmentTitle}</strong>
+                        <span className="text-slate-400">|</span>
+                        <span className="text-rose-600 font-mono font-bold">₹{d.outstandingRupees}</span>
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              ) : (
+                <div className="flex items-center gap-2">
+                  <AlertCircle className="h-4 w-4 shrink-0 text-amber-600" />
+                  <span>
+                    <strong>No Installment Selected:</strong> Please check the installment(s) you wish to collect payment for from the left panel. The payment amount will populate automatically.
+                  </span>
+                </div>
+              )}
             </div>
           )}
 
@@ -217,6 +381,9 @@ export default function SinglePayment() {
               <div>
                 <label className="block font-bold text-slate-700 mb-1">
                   Amount to Collect (₹) <span className="text-rose-500">*</span>
+                  <span className="text-[11px] font-normal text-slate-400 ml-1.5">
+                    (Auto-calculated from selected installment)
+                  </span>
                 </label>
                 <input
                   type="number"
@@ -225,8 +392,12 @@ export default function SinglePayment() {
                   required
                   value={amountRupees}
                   onChange={(e) => setAmountRupees(e.target.value)}
-                  placeholder="0.00"
-                  className="w-full px-3 py-2 text-base font-black text-indigo-700 rounded-lg border border-slate-300 font-mono"
+                  placeholder="Select installment first..."
+                  className={`w-full px-3 py-2 text-base font-black rounded-lg border font-mono transition ${
+                    selectedDueIds.length > 0
+                      ? 'bg-white text-indigo-700 border-indigo-300 ring-2 ring-indigo-100'
+                      : 'bg-slate-50 text-slate-400 border-slate-200'
+                  }`}
                 />
               </div>
             </div>
@@ -249,6 +420,7 @@ export default function SinglePayment() {
                   type="tel"
                   value={payerMobile}
                   onChange={(e) => setPayerMobile(e.target.value)}
+                  placeholder="10-digit mobile"
                   className="w-full px-3 py-2 rounded-lg border border-slate-300 font-mono"
                 />
               </div>
@@ -266,105 +438,96 @@ export default function SinglePayment() {
             </div>
 
             {/* Cheque Specific Fields */}
-            {paymentMode === 'CHEQUE' && (
-              <div className="p-4 bg-amber-50/70 border border-amber-200 rounded-xl space-y-3">
-                <h4 className="font-bold text-amber-900 text-xs flex items-center gap-1.5">
-                  Cheque Details (Cheque will be marked RECEIVED and await clearance)
-                </h4>
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                  <div>
-                    <label className="block font-bold text-slate-700 mb-1">
-                      Cheque Number <span className="text-rose-500">*</span>
-                    </label>
-                    <input
-                      type="text"
-                      required
-                      value={chequeDetails.chequeNumber}
-                      onChange={(e) => setChequeDetails({ ...chequeDetails, chequeNumber: e.target.value })}
-                      placeholder="e.g. 123456"
-                      className="w-full px-3 py-1.5 rounded-lg border border-slate-300 font-mono bg-white"
-                    />
-                  </div>
-                  <div>
-                    <label className="block font-bold text-slate-700 mb-1">
-                      Bank Name <span className="text-rose-500">*</span>
-                    </label>
-                    <input
-                      type="text"
-                      required
-                      value={chequeDetails.bankName}
-                      onChange={(e) => setChequeDetails({ ...chequeDetails, bankName: e.target.value })}
-                      placeholder="e.g. SBI, HDFC, Bank of Baroda"
-                      className="w-full px-3 py-1.5 rounded-lg border border-slate-300 bg-white"
-                    />
-                  </div>
-                  <div>
-                    <label className="block font-bold text-slate-700 mb-1">Cheque Date</label>
-                    <input
-                      type="date"
-                      value={chequeDetails.chequeDate}
-                      onChange={(e) => setChequeDetails({ ...chequeDetails, chequeDate: e.target.value })}
-                      className="w-full px-3 py-1.5 rounded-lg border border-slate-300 bg-white"
-                    />
-                  </div>
+            {paymentMode === 'CHEQUE' ? (
+              <div className="p-4 bg-amber-50/60 rounded-xl border border-amber-200 grid grid-cols-1 sm:grid-cols-3 gap-4">
+                <div>
+                  <label className="block font-bold text-slate-700 mb-1">
+                    Cheque Number <span className="text-rose-500">*</span>
+                  </label>
+                  <input
+                    type="text"
+                    required
+                    value={chequeDetails.chequeNumber}
+                    onChange={(e) => setChequeDetails({ ...chequeDetails, chequeNumber: e.target.value })}
+                    placeholder="e.g. 123456"
+                    className="w-full px-3 py-2 rounded-lg border border-slate-300 bg-white font-mono"
+                  />
+                </div>
+                <div>
+                  <label className="block font-bold text-slate-700 mb-1">
+                    Bank Name & Branch <span className="text-rose-500">*</span>
+                  </label>
+                  <input
+                    type="text"
+                    required
+                    value={chequeDetails.bankName}
+                    onChange={(e) => setChequeDetails({ ...chequeDetails, bankName: e.target.value })}
+                    placeholder="e.g. SBI, Mahuva"
+                    className="w-full px-3 py-2 rounded-lg border border-slate-300 bg-white"
+                  />
+                </div>
+                <div>
+                  <label className="block font-bold text-slate-700 mb-1">Cheque Date</label>
+                  <input
+                    type="date"
+                    value={chequeDetails.chequeDate}
+                    onChange={(e) => setChequeDetails({ ...chequeDetails, chequeDate: e.target.value })}
+                    className="w-full px-3 py-2 rounded-lg border border-slate-300 bg-white"
+                  />
                 </div>
               </div>
-            )}
-
-            {/* UPI or Bank Transfer Reference */}
-            {['UPI', 'BANK_TRANSFER'].includes(paymentMode) && (
+            ) : (
               <div>
-                <label className="block font-bold text-slate-700 mb-1">
-                  Transaction UTR / Reference Number <span className="text-rose-500">*</span>
-                </label>
+                <label className="block font-bold text-slate-700 mb-1">Transaction Ref / UTR / Remarks</label>
                 <input
                   type="text"
-                  required
                   value={referenceNumber}
                   onChange={(e) => setReferenceNumber(e.target.value)}
-                  placeholder="e.g. UPI-99887766 or NEFT UTR"
+                  placeholder="e.g. UPI Ref / Bank UTR number"
                   className="w-full px-3 py-2 rounded-lg border border-slate-300 font-mono"
                 />
               </div>
             )}
 
             <div>
-              <label className="block font-bold text-slate-700 mb-1">Remarks</label>
+              <label className="block font-bold text-slate-700 mb-1">Internal Notes</label>
               <input
                 type="text"
                 value={remarks}
                 onChange={(e) => setRemarks(e.target.value)}
-                placeholder="Optional notes"
+                placeholder="Optional notes for society records..."
                 className="w-full px-3 py-2 rounded-lg border border-slate-300"
               />
             </div>
 
-            <div className="pt-3 border-t border-slate-100 flex items-center justify-between">
-              <span className="text-xs text-slate-500">
-                {paymentMode === 'CHEQUE'
-                  ? 'Cheque payments require later clearance to credit the ledger.'
-                  : 'Immediate payment: Ledger and dues will be credited upon submission.'}
-              </span>
-
-              <button
-                type="submit"
-                disabled={submitting || !selectedMember}
-                className="px-6 py-2.5 bg-emerald-600 text-white rounded-lg font-bold text-xs hover:bg-emerald-700 shadow-md transition disabled:opacity-50"
-              >
-                {submitting ? 'Posting Payment...' : 'Collect Payment & Generate Receipt'}
-              </button>
-            </div>
+            <button
+              type="submit"
+              disabled={selectedDueIds.length === 0 || !amountRupees || Number(amountRupees) <= 0 || submitting}
+              className="w-full py-3 px-4 bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white font-bold rounded-lg shadow-sm transition text-xs flex items-center justify-center gap-2 cursor-pointer disabled:cursor-not-allowed"
+            >
+              {submitting ? (
+                <>
+                  <RefreshCw className="h-4 w-4 animate-spin" />
+                  <span>Processing Payment...</span>
+                </>
+              ) : selectedDueIds.length === 0 ? (
+                <span>⚠️ Please Select Installment(s) to Collect Payment</span>
+              ) : (
+                <span>
+                  Collect ₹{Number(amountRupees || 0).toFixed(2)} & Issue Receipt ({selectedDueIds.length} Installment{selectedDueIds.length > 1 ? 's' : ''})
+                </span>
+              )}
+            </button>
           </form>
         </div>
       </div>
 
-      {/* Receipt Modal */}
+      {/* Printable Receipt Modal */}
       <Modal
         isOpen={isReceiptModalOpen}
         onClose={() => setIsReceiptModalOpen(false)}
         title="Official Payment Receipt"
-        subtitle="Receipt generated successfully."
-        maxWidth="max-w-xl"
+        size="lg"
       >
         <SinglePaymentReceipt
           receipt={receipt}
