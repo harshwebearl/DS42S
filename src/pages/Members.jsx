@@ -18,16 +18,19 @@ import {
   Calendar,
   Phone,
   Mail,
-  MapPin
+  MapPin,
+  Upload
 } from 'lucide-react';
 import Modal from '../components/common/Modal';
 import Badge from '../components/common/Badge';
 import Pagination from '../components/common/Pagination';
+import ExcelImportModal from '../components/members/ExcelImportModal';
 
 export default function Members() {
   const [members, setMembers] = useState([]);
   const [villages, setVillages] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [isImportModalOpen, setIsImportModalOpen] = useState(false);
 
   // Search & Filters
   const [search, setSearch] = useState('');
@@ -213,6 +216,13 @@ export default function Members() {
           </p>
         </div>
         <div className="flex items-center gap-2">
+          <button
+            onClick={() => setIsImportModalOpen(true)}
+            className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-lg border border-indigo-200 bg-indigo-50 text-indigo-700 text-xs font-bold hover:bg-indigo-100 shadow-2xs"
+          >
+            <Upload className="h-4 w-4 text-indigo-600" />
+            Import Excel
+          </button>
           <button
             onClick={handleExportExcel}
             className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg border border-slate-300 bg-white text-slate-700 text-xs font-semibold hover:bg-slate-50 shadow-2xs"
@@ -740,6 +750,13 @@ export default function Members() {
           </div>
         )}
       </Modal>
+
+      {/* Excel Bulk Import with Column Mapping Modal */}
+      <ExcelImportModal
+        isOpen={isImportModalOpen}
+        onClose={() => setIsImportModalOpen(false)}
+        onImportSuccess={fetchMembers}
+      />
     </div>
   );
 }
