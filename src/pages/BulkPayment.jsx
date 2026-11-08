@@ -89,7 +89,9 @@ export default function BulkPayment() {
     }
 
     const firstDue = duesInfo.length > 0 ? duesInfo[0] : null;
-    const initialAmount = firstDue ? firstDue.outstandingRupees : (duesInfo.length === 0 ? 0 : 1000);
+    const initialAmount = firstDue
+      ? (firstDue.isThreeMonthsOverdue ? firstDue.totalWithPenaltyRupees : firstDue.outstandingRupees)
+      : (duesInfo.length === 0 ? 0 : 1000);
     const pendingTotal = duesInfo.reduce((acc, d) => acc + (d.outstandingRupees || 0), 0);
 
     const newRow = {
@@ -111,7 +113,9 @@ export default function BulkPayment() {
       allocatedRows.map((r) => {
         if (r.memberId === memberId) {
           const matchedDue = r.dues.find((d) => d._id === dueId);
-          const newAmt = matchedDue ? matchedDue.outstandingRupees : r.amountRupees;
+          const newAmt = matchedDue
+            ? (matchedDue.isThreeMonthsOverdue ? matchedDue.totalWithPenaltyRupees : matchedDue.outstandingRupees)
+            : r.amountRupees;
           return {
             ...r,
             selectedDueId: dueId,
@@ -137,10 +141,14 @@ export default function BulkPayment() {
       );
 
       if (matchingDue) {
+        const newAmt = matchingDue.isThreeMonthsOverdue
+          ? matchingDue.totalWithPenaltyRupees
+          : matchingDue.outstandingRupees;
+
         return {
           ...r,
           selectedDueId: matchingDue._id,
-          amountRupees: matchingDue.outstandingRupees
+          amountRupees: newAmt
         };
       }
       return r;
@@ -201,6 +209,11 @@ export default function BulkPayment() {
   // Real-time calculation totals
   const totalReceived = parseFloat(totalAmountRupees) || 0;
   const sumAllocated = allocatedRows.reduce((acc, r) => acc + (parseFloat(r.amountRupees) || 0), 0);
+  const totalPenaltiesIncluded = allocatedRows.reduce((acc, r) => {
+    const due = r.dues.find((d) => d._id === r.selectedDueId);
+    return acc + (due && due.isThreeMonthsOverdue ? (due.penaltyAmountRupees || 0) : 0);
+  }, 0);
+  const totalBaseInstallmentAmount = sumAllocated - totalPenaltiesIncluded;
   const remainingUnallocated = Math.round((totalReceived - sumAllocated) * 100) / 100;
   const isExactMatch = Math.abs(remainingUnallocated) === 0 && allocatedRows.length > 0;
 
@@ -576,17 +589,49 @@ export default function BulkPayment() {
                         {row.dues.length === 0 ? (
                           <span className="text-slate-400 text-[11px] italic">No pending installments</span>
                         ) : (
-                          <select
-                            value={row.selectedDueId}
-                            onChange={(e) => handleRowDueChange(row.memberId, e.target.value)}
-                            className="w-full px-2 py-1 text-xs rounded border border-indigo-200 bg-indigo-50/40 font-medium text-slate-800 focus:ring-1 focus:ring-indigo-500"
-                          >
-                            {row.dues.map((d) => (
-                              <option key={d._id} value={d._id}>
-                                {d.installmentId?.installmentTitle || 'Installment'} — ₹{d.outstandingRupees}
-                              </option>
-                            ))}
-                          </select>
+                          <div className="space-y-1">
+                            <select
+                              value={row.selectedDueId}
+                              onChange={(e) => handleRowDueChange(row.memberId, e.target.value)}
+                              className={`w-full px-2 py-1 text-xs rounded border font-medium focus:ring-1 focus:ring-indigo-500 ${
+                                row.dues.find(d => d._id === row.selectedDueId)?.isThreeMonthsOverdue
+                                  ? 'border-rose-300 bg-rose-50/70 text-rose-900 font-bold'
+                                  : 'border-indigo-200 bg-indigo-50/40 text-slate-800'
+                              }`}
+                            >
+                              {row.dues.map((d) => (
+                                <option key={d._id} value={d._id}>
+                                  {d.installmentId?.installmentTitle || 'Installment'} — ₹{d.outstandingRupees} {d.isThreeMonthsOverdue ? `(+₹${d.penaltyAmountRupees} Overdue Penalty)` : ''}
+                                </option>
+                              ))}
+                            </select>
+
+                            {/* Show Due Date & Overdue 3 Months status */}
+                            {(() => {
+                              const selectedDue = row.dues.find((d) => d._id === row.selectedDueId);
+                              if (!selectedDue) return null;
+                              if (selectedDue.isThreeMonthsOverdue) {
+                                return (
+                                  <div className="text-[10px] text-rose-700 font-bold flex items-center gap-1">
+                                    <span className="h-1.5 w-1.5 rounded-full bg-rose-600 animate-pulse shrink-0" />
+                                    <span>Due: {new Date(selectedDue.dueDate).toLocaleDateString()} (&gt;3 Mo Overdue +₹{selectedDue.penaltyAmountRupees})</span>
+                                  </div>
+                                );
+                              } else if (selectedDue.isDuePassed) {
+                                return (
+                                  <div className="text-[10px] text-amber-700 font-medium">
+                                    Due Date passed: {new Date(selectedDue.dueDate).toLocaleDateString()} (Grace period)
+                                  </div>
+                                );
+                              } else {
+                                return (
+                                  <div className="text-[10px] text-slate-400">
+                                    Due Date: {new Date(selectedDue.dueDate).toLocaleDateString()}
+                                  </div>
+                                );
+                              }
+                            })()}
+                          </div>
                         )}
                       </td>
 
@@ -618,6 +663,29 @@ export default function BulkPayment() {
             </table>
           </div>
 
+          {/* Overdue Penalty Banner if applicable */}
+          {totalPenaltiesIncluded > 0 && (
+            <div className="p-3 bg-rose-50 border border-rose-200 rounded-xl text-xs text-rose-900 flex items-center justify-between gap-3">
+              <div className="flex items-center gap-2">
+                <AlertCircle className="h-4 w-4 shrink-0 text-rose-600" />
+                <div>
+                  <span className="font-bold">Overdue Penalties Included (&gt; 3 Months Past Due):</span>{' '}
+                  ₹{totalPenaltiesIncluded.toFixed(2)} penalty is automatically applied for installments exceeding 3 months.
+                  <span className="block text-[11px] text-rose-700 font-mono mt-0.5">
+                    (Base Installments: ₹{totalBaseInstallmentAmount.toFixed(2)} + Penalties: ₹{totalPenaltiesIncluded.toFixed(2)})
+                  </span>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setTotalAmountRupees(sumAllocated.toString())}
+                className="px-3 py-1.5 rounded-lg bg-rose-600 text-white font-bold text-xs hover:bg-rose-700 shrink-0 shadow-2xs transition"
+              >
+                Sync Cheque Total (₹{sumAllocated.toFixed(2)})
+              </button>
+            </div>
+          )}
+
           {/* REAL-TIME ALLOCATION TOTALS BAR */}
           <div className="p-4 bg-slate-900 text-white rounded-xl grid grid-cols-2 sm:grid-cols-4 gap-4 text-xs font-mono">
             <div>
@@ -636,7 +704,7 @@ export default function BulkPayment() {
             </div>
             <div>
               <p className="text-[10px] text-slate-400 uppercase font-sans font-bold">Validation Status</p>
-              <div className="mt-1">
+              <div className="mt-1 flex items-center justify-between">
                 {allocatedRows.length === 0 ? (
                   <span className="text-slate-400 text-[11px] font-sans">Awaiting Members</span>
                 ) : isExactMatch ? (
@@ -647,6 +715,16 @@ export default function BulkPayment() {
                   <span className="inline-flex items-center gap-1 text-rose-400 font-bold font-sans text-xs">
                     <AlertCircle className="h-3.5 w-3.5" /> Mismatch
                   </span>
+                )}
+                {!isExactMatch && allocatedRows.length > 0 && (
+                  <button
+                    type="button"
+                    onClick={() => setTotalAmountRupees(sumAllocated.toString())}
+                    className="ml-2 px-2 py-0.5 rounded bg-indigo-600 text-white font-sans text-[10px] font-bold hover:bg-indigo-500"
+                    title="Auto-match cheque amount to allocated sum"
+                  >
+                    Auto Match
+                  </button>
                 )}
               </div>
             </div>

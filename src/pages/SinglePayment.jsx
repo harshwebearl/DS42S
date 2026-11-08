@@ -71,9 +71,13 @@ export default function SinglePayment() {
     }
     setSelectedDueIds(updated);
 
-    // Sum amount of all selected installments
+    // Sum amount of all selected installments (including 3+ months overdue penalty)
     const selected = memberDues.filter((d) => updated.includes(d._id));
-    const total = selected.reduce((acc, d) => acc + (d.outstandingRupees || 0), 0);
+    const total = selected.reduce((acc, d) => {
+      const baseAmt = d.outstandingRupees || 0;
+      const penaltyAmt = d.isThreeMonthsOverdue ? (d.penaltyAmountRupees || 0) : 0;
+      return acc + baseAmt + penaltyAmt;
+    }, 0);
     setAmountRupees(total > 0 ? total : '');
   };
 
@@ -82,7 +86,11 @@ export default function SinglePayment() {
     const pendingDues = memberDues.filter((d) => ['PENDING', 'PARTIAL', 'OVERDUE'].includes(d.status));
     const allIds = pendingDues.map((d) => d._id);
     setSelectedDueIds(allIds);
-    const total = pendingDues.reduce((acc, d) => acc + (d.outstandingRupees || 0), 0);
+    const total = pendingDues.reduce((acc, d) => {
+      const baseAmt = d.outstandingRupees || 0;
+      const penaltyAmt = d.isThreeMonthsOverdue ? (d.penaltyAmountRupees || 0) : 0;
+      return acc + baseAmt + penaltyAmt;
+    }, 0);
     setAmountRupees(total > 0 ? total : '');
   };
 
@@ -144,6 +152,9 @@ export default function SinglePayment() {
 
   const selectedDuesList = memberDues.filter((d) => selectedDueIds.includes(d._id));
   const pendingDuesCount = memberDues.filter((d) => ['PENDING', 'PARTIAL', 'OVERDUE'].includes(d.status)).length;
+  const baseSelectedTotal = selectedDuesList.reduce((acc, d) => acc + (d.outstandingRupees || 0), 0);
+  const penaltySelectedTotal = selectedDuesList.reduce((acc, d) => acc + (d.isThreeMonthsOverdue ? (d.penaltyAmountRupees || 0) : 0), 0);
+  const hasPenaltySelected = penaltySelectedTotal > 0;
 
   return (
     <div className="space-y-6">
@@ -254,7 +265,8 @@ export default function SinglePayment() {
                     {memberDues.map((d) => {
                       const isSelected = selectedDueIds.includes(d._id);
                       const isDuePassed = d.isDuePassed;
-                      const badgeStatus = isDuePassed ? 'DUE' : 'OPEN';
+                      const isThreeMonths = d.isThreeMonthsOverdue;
+                      const badgeStatus = isThreeMonths ? 'OVERDUE' : (isDuePassed ? 'DUE' : 'OPEN');
 
                       return (
                         <div
@@ -263,8 +275,10 @@ export default function SinglePayment() {
                           className={`p-3 rounded-xl border text-xs transition cursor-pointer flex items-center justify-between gap-3 ${
                             isSelected
                               ? 'bg-indigo-50 border-indigo-500 shadow-xs ring-1 ring-indigo-500'
+                              : isThreeMonths
+                              ? 'bg-rose-50/50 border-rose-300 hover:border-rose-400'
                               : isDuePassed
-                              ? 'bg-rose-50/30 border-rose-200 hover:border-rose-300'
+                              ? 'bg-amber-50/40 border-amber-200 hover:border-amber-300'
                               : 'bg-white border-slate-200 hover:border-slate-300 hover:bg-slate-50/50'
                           }`}
                         >
@@ -275,26 +289,46 @@ export default function SinglePayment() {
                               onChange={() => handleToggleDue(d._id)}
                               className="h-4 w-4 rounded text-indigo-600 focus:ring-indigo-500 border-slate-300 cursor-pointer shrink-0"
                             />
-                            <div className="min-w-0">
+                            <div className="min-w-0 space-y-0.5">
                               <p className={`font-bold truncate ${isSelected ? 'text-indigo-900' : 'text-slate-800'}`}>
                                 {d.installmentId?.installmentTitle || 'Installment'}
                               </p>
-                              <p className={`text-[11px] ${isDuePassed ? 'text-rose-600 font-bold' : 'text-slate-500'}`}>
-                                {isDuePassed ? (
+                              {isThreeMonths ? (
+                                <div className="space-y-0.5">
+                                  <p className="text-[11px] text-rose-700 font-bold flex items-center gap-1.5 flex-wrap">
+                                    <span>⚠️ Due Date: {new Date(d.dueDate).toLocaleDateString()}</span>
+                                    <span className="bg-rose-100 text-rose-800 px-1.5 py-0.5 rounded text-[10px] font-extrabold uppercase">
+                                      &gt; 3 Mo Overdue
+                                    </span>
+                                  </p>
+                                  <p className="text-[10px] text-rose-600 font-semibold">
+                                    {d.penaltyTitle || 'Late Penalty'}: +₹{d.penaltyAmountRupees?.toFixed(2)}
+                                  </p>
+                                </div>
+                              ) : isDuePassed ? (
+                                <p className="text-[11px] text-amber-700 font-semibold">
                                   <span>⚠️ Due Date Passed: {new Date(d.dueDate).toLocaleDateString()}</span>
-                                ) : (
-                                  <span>Due Date: {new Date(d.dueDate).toLocaleDateString()}</span>
-                                )}
-                              </p>
+                                  <span className="text-[10px] text-slate-400 block font-normal">Within 3 months (Grace period - No penalty yet)</span>
+                                </p>
+                              ) : (
+                                <p className="text-[11px] text-slate-500">
+                                  Due Date: {new Date(d.dueDate).toLocaleDateString()}
+                                </p>
+                              )}
                             </div>
                           </div>
 
                           <div className="text-right shrink-0 space-y-0.5">
                             <p className="font-bold text-slate-900 font-mono text-sm">
-                              ₹{d.outstandingRupees?.toFixed(2)}
+                              ₹{(isThreeMonths ? d.totalWithPenaltyRupees : d.outstandingRupees)?.toFixed(2)}
                             </p>
+                            {isThreeMonths && (
+                              <p className="text-[10px] text-slate-500 font-mono">
+                                (₹{d.outstandingRupees} + ₹{d.penaltyAmountRupees})
+                              </p>
+                            )}
                             <div>
-                              <Badge status={badgeStatus} />
+                              <Badge status={badgeStatus} text={isThreeMonths ? '3+ MO OVERDUE' : undefined} />
                             </div>
                           </div>
                         </div>
@@ -328,26 +362,53 @@ export default function SinglePayment() {
                 : 'bg-amber-50 border-amber-200 text-amber-800'
             }`}>
               {selectedDueIds.length > 0 ? (
-                <div className="space-y-2">
-                  <div className="flex items-center justify-between">
+                <div className="space-y-2.5">
+                  <div className="flex items-center justify-between flex-wrap gap-2">
                     <span className="font-bold text-indigo-900 flex items-center gap-1.5">
                       <CheckCircle2 className="h-4 w-4 text-indigo-600" />
                       Selected Installment(s) for Payment:
                     </span>
-                    <span className="font-mono font-black text-indigo-700 text-sm">
-                      Total: ₹{Number(amountRupees || 0).toFixed(2)}
-                    </span>
+                    <div className="text-right">
+                      <span className="font-mono font-black text-indigo-700 text-sm">
+                        Total: ₹{Number(amountRupees || 0).toFixed(2)}
+                      </span>
+                      {hasPenaltySelected && (
+                        <p className="text-[10px] text-rose-600 font-mono font-bold">
+                          (Base: ₹{baseSelectedTotal.toFixed(2)} + Overdue Penalty: ₹{penaltySelectedTotal.toFixed(2)})
+                        </p>
+                      )}
+                    </div>
                   </div>
+
+                  {hasPenaltySelected && (
+                    <div className="p-2.5 bg-rose-50 border border-rose-200 rounded-lg text-rose-800 text-[11px] flex items-start gap-2">
+                      <AlertCircle className="h-4 w-4 shrink-0 text-rose-600 mt-0.5" />
+                      <div>
+                        <strong>Penalty Applicable (&gt; 3 Months Overdue):</strong> One or more selected installments have passed their due date by more than 3 months. A late payment penalty of ₹{penaltySelectedTotal.toFixed(2)} has been automatically calculated and included in the collection total.
+                      </div>
+                    </div>
+                  )}
+
                   <div className="flex flex-wrap gap-1.5">
                     {selectedDuesList.map((d) => (
                       <span
                         key={d._id}
-                        className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-white border border-indigo-200 text-indigo-900 font-medium text-[11px] shadow-2xs"
+                        className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-white border text-[11px] shadow-2xs ${
+                          d.isThreeMonthsOverdue ? 'border-rose-300 text-rose-900' : 'border-indigo-200 text-indigo-900'
+                        }`}
                       >
                         <strong>{d.installmentId?.installmentTitle}</strong>
-                        <Badge status={d.isDuePassed ? 'DUE' : 'OPEN'} />
+                        <Badge
+                          status={d.isThreeMonthsOverdue ? 'OVERDUE' : (d.isDuePassed ? 'DUE' : 'OPEN')}
+                          text={d.isThreeMonthsOverdue ? '3+ MO OVERDUE' : undefined}
+                        />
                         <span className="text-slate-300">|</span>
-                        <span className="text-indigo-700 font-mono font-bold">₹{d.outstandingRupees}</span>
+                        <span className="font-mono font-bold">
+                          ₹{(d.isThreeMonthsOverdue ? d.totalWithPenaltyRupees : d.outstandingRupees)?.toFixed(2)}
+                        </span>
+                        {d.isThreeMonthsOverdue && (
+                          <span className="text-[10px] text-rose-600 font-semibold">(incl. ₹{d.penaltyAmountRupees} penalty)</span>
+                        )}
                       </span>
                     ))}
                   </div>
