@@ -237,8 +237,41 @@ export default function Members() {
     }
   };
 
-  const handleExportExcel = () => {
-    window.open(`${API_URL}/reports/all-members/export-excel?villageId=${villageFilter}&status=${statusFilter}`, '_blank');
+  const [exporting, setExporting] = useState(false);
+
+  const handleExportExcel = async () => {
+    setExporting(true);
+    try {
+      const res = await api.get('/reports/all-members/export-excel', {
+        params: {
+          villageId: villageFilter,
+          status: statusFilter
+        },
+        responseType: 'blob'
+      });
+
+      const blob = new Blob([res.data], {
+        type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+      });
+      const url = window.URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.setAttribute('download', `DS24G_Members_Directory_${new Date().toISOString().split('T')[0]}.xlsx`);
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      window.URL.revokeObjectURL(url);
+    } catch (err) {
+      console.error('Export Excel failed:', err);
+      // Fallback with token in URL if blob fails
+      const token = localStorage.getItem('token');
+      window.open(
+        `${API_URL}/reports/all-members/export-excel?villageId=${villageFilter}&status=${statusFilter}&token=${encodeURIComponent(token || '')}`,
+        '_blank'
+      );
+    } finally {
+      setExporting(false);
+    }
   };
 
   return (
@@ -264,10 +297,20 @@ export default function Members() {
           </button>
           <button
             onClick={handleExportExcel}
-            className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg border border-slate-300 bg-white text-slate-700 text-xs font-semibold hover:bg-slate-50 shadow-2xs"
+            disabled={exporting}
+            className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg border border-slate-300 bg-white text-slate-700 text-xs font-semibold hover:bg-slate-50 shadow-2xs disabled:opacity-50 cursor-pointer"
           >
-            <FileSpreadsheet className="h-4 w-4 text-emerald-600" />
-            Export Excel
+            {exporting ? (
+              <>
+                <div className="w-3.5 h-3.5 border-2 border-emerald-600 border-t-transparent rounded-full animate-spin" />
+                <span>Exporting...</span>
+              </>
+            ) : (
+              <>
+                <FileSpreadsheet className="h-4 w-4 text-emerald-600" />
+                <span>Export Excel</span>
+              </>
+            )}
           </button>
           <button
             onClick={openAddModal}

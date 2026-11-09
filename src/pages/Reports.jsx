@@ -63,9 +63,39 @@ export default function Reports() {
     fetchReport();
   }, [activeReportId, villageFilter]);
 
-  const handleExportExcel = () => {
-    const token = localStorage.getItem('token');
-    window.open(`${API_URL}/reports/${activeReportId}/export-excel?villageId=${villageFilter}`, '_blank');
+  const [exporting, setExporting] = useState(false);
+
+  const handleExportExcel = async () => {
+    setExporting(true);
+    try {
+      const res = await api.get(`/reports/${activeReportId}/export-excel`, {
+        params: {
+          villageId: villageFilter
+        },
+        responseType: 'blob'
+      });
+
+      const blob = new Blob([res.data], {
+        type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+      });
+      const url = window.URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.setAttribute('download', `DS24G_${activeReportId}_${new Date().toISOString().split('T')[0]}.xlsx`);
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      window.URL.revokeObjectURL(url);
+    } catch (err) {
+      console.error('Export Excel failed:', err);
+      const token = localStorage.getItem('token');
+      window.open(
+        `${API_URL}/reports/${activeReportId}/export-excel?villageId=${villageFilter}&token=${encodeURIComponent(token || '')}`,
+        '_blank'
+      );
+    } finally {
+      setExporting(false);
+    }
   };
 
   const handlePrint = () => {
@@ -101,10 +131,20 @@ export default function Reports() {
         <div className="flex items-center gap-2">
           <button
             onClick={handleExportExcel}
-            className="inline-flex items-center gap-1.5 px-3.5 py-2 bg-emerald-600 text-white rounded-lg text-xs font-bold hover:bg-emerald-700 shadow-sm transition"
+            disabled={exporting}
+            className="inline-flex items-center gap-1.5 px-3.5 py-2 bg-emerald-600 text-white rounded-lg text-xs font-bold hover:bg-emerald-700 shadow-sm transition disabled:opacity-50 cursor-pointer"
           >
-            <FileSpreadsheet className="h-4 w-4" />
-            Export to Excel (.xlsx)
+            {exporting ? (
+              <>
+                <div className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                <span>Exporting...</span>
+              </>
+            ) : (
+              <>
+                <FileSpreadsheet className="h-4 w-4" />
+                <span>Export to Excel (.xlsx)</span>
+              </>
+            )}
           </button>
           <button
             onClick={handlePrint}
