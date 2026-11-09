@@ -4,13 +4,16 @@ import {
   CheckCircle2,
   Clock,
   AlertTriangle,
+  AlertCircle,
   Search,
   Filter,
   Check,
   XCircle,
   Building2,
   Layers,
-  ArrowRight
+  ArrowRight,
+  Trash2,
+  X
 } from 'lucide-react';
 import Modal from '../components/common/Modal';
 import Badge from '../components/common/Badge';
@@ -29,6 +32,10 @@ export default function ChequeClearance() {
   const [clearanceReference, setClearanceReference] = useState('');
   const [bounceDate, setBounceDate] = useState(new Date().toISOString().split('T')[0]);
   const [bounceReason, setBounceReason] = useState('Insufficient Funds / Signature Difference');
+
+  // Modal for Delete
+  const [chequeToDelete, setChequeToDelete] = useState(null);
+  const [deleting, setDeleting] = useState(false);
 
   const [submitting, setSubmitting] = useState(false);
   const [feedback, setFeedback] = useState('');
@@ -97,6 +104,27 @@ export default function ChequeClearance() {
     }
   };
 
+  const openDeleteConfirm = (c) => {
+    setChequeToDelete(c);
+    setErrorMsg('');
+  };
+
+  const handleDeleteCheque = async () => {
+    if (!chequeToDelete) return;
+    setDeleting(true);
+    setErrorMsg('');
+    try {
+      const res = await api.delete(`/cheques/${chequeToDelete._id}`);
+      setFeedback(res.data.message || 'Cheque deleted successfully.');
+      setChequeToDelete(null);
+      fetchCheques();
+    } catch (err) {
+      setErrorMsg(err.response?.data?.message || 'Error deleting cheque.');
+    } finally {
+      setDeleting(false);
+    }
+  };
+
   return (
     <div className="space-y-6">
       {/* Page Header */}
@@ -113,9 +141,18 @@ export default function ChequeClearance() {
       </div>
 
       {feedback && (
-        <div className="p-3 bg-emerald-50 border border-emerald-200 rounded-xl text-xs text-emerald-800 flex items-center gap-2">
-          <CheckCircle2 className="h-4 w-4 shrink-0 text-emerald-600" />
-          <span>{feedback}</span>
+        <div className="p-3 bg-emerald-50 border border-emerald-200 rounded-xl text-xs text-emerald-800 flex items-center justify-between gap-2">
+          <div className="flex items-center gap-2">
+            <CheckCircle2 className="h-4 w-4 shrink-0 text-emerald-600" />
+            <span>{feedback}</span>
+          </div>
+          <button
+            type="button"
+            onClick={() => setFeedback('')}
+            className="text-slate-400 hover:text-slate-600 p-0.5 cursor-pointer"
+          >
+            <X className="h-4 w-4" />
+          </button>
         </div>
       )}
 
@@ -229,38 +266,50 @@ export default function ChequeClearance() {
                       )}
                     </td>
 
-                    <td className="py-3 px-4 text-right space-x-1">
-                      {c.paymentStatus === 'RECEIVED' && (
+                    <td className="py-3 px-4 text-right">
+                      <div className="flex items-center justify-end gap-1.5">
+                        {c.paymentStatus === 'RECEIVED' && (
+                          <button
+                            onClick={() => openActionModal(c, 'DEPOSIT')}
+                            className="px-2.5 py-1 rounded bg-amber-50 text-amber-700 border border-amber-200 font-bold hover:bg-amber-100 transition cursor-pointer"
+                          >
+                            Deposit
+                          </button>
+                        )}
+
+                        {['RECEIVED', 'DEPOSITED'].includes(c.paymentStatus) && (
+                          <>
+                            <button
+                              onClick={() => openActionModal(c, 'CLEAR')}
+                              className="px-2.5 py-1 rounded bg-emerald-600 text-white font-bold hover:bg-emerald-700 shadow-2xs transition cursor-pointer"
+                            >
+                              Clear
+                            </button>
+                            <button
+                              onClick={() => openActionModal(c, 'BOUNCE')}
+                              className="px-2.5 py-1 rounded bg-rose-50 text-rose-700 border border-rose-200 font-bold hover:bg-rose-100 transition cursor-pointer"
+                            >
+                              Bounce
+                            </button>
+                          </>
+                        )}
+
+                        {c.paymentStatus === 'CLEARED' && (
+                          <span className="text-[11px] font-bold text-emerald-700 inline-flex items-center gap-1">
+                            <Check className="h-3.5 w-3.5" /> Cleared
+                          </span>
+                        )}
+
+                        {/* Delete Button */}
                         <button
-                          onClick={() => openActionModal(c, 'DEPOSIT')}
-                          className="px-2.5 py-1 rounded bg-amber-50 text-amber-700 border border-amber-200 font-bold hover:bg-amber-100"
+                          type="button"
+                          onClick={() => openDeleteConfirm(c)}
+                          title="ચેક ડિલીટ કરો (Delete Cheque)"
+                          className="p-1.5 rounded-lg border border-slate-200 text-slate-400 hover:text-rose-600 hover:bg-rose-50 hover:border-rose-200 transition inline-flex items-center cursor-pointer ml-1"
                         >
-                          Deposit
+                          <Trash2 className="h-3.5 w-3.5" />
                         </button>
-                      )}
-
-                      {['RECEIVED', 'DEPOSITED'].includes(c.paymentStatus) && (
-                        <>
-                          <button
-                            onClick={() => openActionModal(c, 'CLEAR')}
-                            className="px-2.5 py-1 rounded bg-emerald-600 text-white font-bold hover:bg-emerald-700 shadow-2xs"
-                          >
-                            Clear
-                          </button>
-                          <button
-                            onClick={() => openActionModal(c, 'BOUNCE')}
-                            className="px-2.5 py-1 rounded bg-rose-50 text-rose-700 border border-rose-200 font-bold hover:bg-rose-100"
-                          >
-                            Bounce
-                          </button>
-                        </>
-                      )}
-
-                      {c.paymentStatus === 'CLEARED' && (
-                        <span className="text-[11px] font-bold text-emerald-700 flex items-center justify-end gap-1">
-                          <Check className="h-3.5 w-3.5" /> Cleared
-                        </span>
-                      )}
+                      </div>
                     </td>
                   </tr>
                 ))
@@ -436,6 +485,99 @@ export default function ChequeClearance() {
                 ))}
               </tbody>
             </table>
+          </div>
+        </div>
+      </Modal>
+
+      {/* Delete Confirmation Modal */}
+      <Modal
+        isOpen={!!chequeToDelete}
+        onClose={() => setChequeToDelete(null)}
+        title={`ચેક ડિલીટ કરો: #${chequeToDelete?.chequeDetails?.chequeNumber || 'N/A'}`}
+        subtitle="ચેક ટ્રાન્ઝેક્શનને સિસ્ટમમાંથી કાયમ માટે ડિલીટ કરવા માટે પુષ્ટિ કરો."
+      >
+        {errorMsg && (
+          <div className="mb-4 rounded-lg bg-rose-50 p-3 text-xs text-rose-700 flex items-start gap-2 border border-rose-200">
+            <AlertCircle className="h-4 w-4 shrink-0 mt-0.5" />
+            <span>{errorMsg}</span>
+          </div>
+        )}
+
+        <div className="space-y-4 text-xs">
+          {chequeToDelete?.paymentStatus === 'CLEARED' && (
+            <div className="p-3 bg-amber-50 border border-amber-200 rounded-lg text-amber-900 flex items-start gap-2">
+              <AlertTriangle className="h-4 w-4 shrink-0 mt-0.5 text-amber-600" />
+              <div>
+                <p className="font-bold">મહત્વપૂર્ણ ચેતવણી:</p>
+                <p className="mt-0.5">
+                  આ ચેક <strong>CLEARED</strong> છે. તેને ડિલીટ કરવાથી જોડાયેલા તમામ સભ્યોના હપ્તા ચૂકવણી (Dues) રિવર્ટ થશે અને લેજરમાંથી ક્રેડિટ આપમેળે હટી જશે.
+                </p>
+              </div>
+            </div>
+          )}
+
+          <div className="p-3.5 bg-slate-50 border border-slate-200 rounded-xl space-y-2">
+            <div className="flex justify-between">
+              <span className="text-slate-500 font-semibold">ચેક નંબર:</span>
+              <span className="font-mono font-bold text-slate-800">#{chequeToDelete?.chequeDetails?.chequeNumber || 'N/A'}</span>
+            </div>
+            <div className="flex justify-between">
+              <span className="text-slate-500 font-semibold">બેંકનું નામ:</span>
+              <span className="font-bold text-slate-800">{chequeToDelete?.chequeDetails?.bankName}</span>
+            </div>
+            <div className="flex justify-between">
+              <span className="text-slate-500 font-semibold">ચૂકવનારનું નામ (Payer):</span>
+              <span className="font-bold text-slate-800">{chequeToDelete?.payerName}</span>
+            </div>
+            <div className="flex justify-between">
+              <span className="text-slate-500 font-semibold">ટ્રાન્ઝેક્શન ID:</span>
+              <span className="font-mono text-slate-600">{chequeToDelete?.transactionId}</span>
+            </div>
+            <div className="flex justify-between">
+              <span className="text-slate-500 font-semibold">રકમ (Amount):</span>
+              <span className="font-mono font-black text-indigo-700">{chequeToDelete?.formattedTotalAmount}</span>
+            </div>
+            <div className="flex justify-between items-center">
+              <span className="text-slate-500 font-semibold">હાલનું સ્ટેટસ:</span>
+              <Badge status={chequeToDelete?.paymentStatus} />
+            </div>
+            <div className="flex justify-between">
+              <span className="text-slate-500 font-semibold">જોડાયેલા સભ્યો:</span>
+              <span className="font-bold text-slate-700">{chequeToDelete?.allocations?.length || 1} સભ્ય</span>
+            </div>
+          </div>
+
+          <p className="text-slate-600 font-medium">
+            શું તમે ખરેખર આ ચેક ટ્રાન્ઝેક્શન ડિલીટ કરવા માંગો છો? આ ક્રિયા રદ થઈ શકશે નહીં.
+          </p>
+
+          <div className="flex justify-end gap-2 pt-3 border-t border-slate-100">
+            <button
+              type="button"
+              onClick={() => setChequeToDelete(null)}
+              disabled={deleting}
+              className="px-4 py-2 rounded-lg border border-slate-300 text-slate-700 hover:bg-slate-50 font-semibold cursor-pointer"
+            >
+              રદ કરો (Cancel)
+            </button>
+            <button
+              type="button"
+              onClick={handleDeleteCheque}
+              disabled={deleting}
+              className="inline-flex items-center gap-1.5 px-4 py-2 rounded-lg bg-rose-600 text-white font-bold hover:bg-rose-700 disabled:opacity-50 shadow-sm cursor-pointer"
+            >
+              {deleting ? (
+                <>
+                  <div className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                  <span>Deleting...</span>
+                </>
+              ) : (
+                <>
+                  <Trash2 className="h-4 w-4" />
+                  <span>હા, ડિલીટ કરો (Delete Cheque)</span>
+                </>
+              )}
+            </button>
           </div>
         </div>
       </Modal>
