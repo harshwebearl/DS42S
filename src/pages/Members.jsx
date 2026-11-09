@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import api, { API_URL } from '../api/axiosClient';
 import {
@@ -23,7 +23,10 @@ import {
   Upload,
   ArrowUp,
   ArrowDown,
-  ArrowUpDown
+  ArrowUpDown,
+  ChevronDown,
+  Building2,
+  X
 } from 'lucide-react';
 import Modal from '../components/common/Modal';
 import Badge from '../components/common/Badge';
@@ -39,7 +42,13 @@ export default function Members() {
   // Search, Filters & URL-persisted Pagination
   const [searchParams, setSearchParams] = useSearchParams();
   const [search, setSearch] = useState('');
-  const [villageFilter, setVillageFilter] = useState(() => searchParams.get('villageId') || '');
+  const [selectedVillages, setSelectedVillages] = useState(() => {
+    const param = searchParams.get('villageIds') || searchParams.get('villageId') || '';
+    return param ? param.split(',').map((s) => s.trim()).filter(Boolean) : [];
+  });
+  const [isVillageDropdownOpen, setIsVillageDropdownOpen] = useState(false);
+  const [villageSearchQuery, setVillageSearchQuery] = useState('');
+  const villageDropdownRef = useRef(null);
   const [statusFilter, setStatusFilter] = useState('');
   const [sortBy, setSortBy] = useState('memberId');
   const [sortOrder, setSortOrder] = useState('asc'); // By default ascending order!
@@ -47,6 +56,67 @@ export default function Members() {
   const [limit, setLimit] = useState(25);
   const [totalPages, setTotalPages] = useState(1);
   const [total, setTotal] = useState(0);
+
+  // Close dropdown on outside click
+  useEffect(() => {
+    const handleClickOutside = (e) => {
+      if (villageDropdownRef.current && !villageDropdownRef.current.contains(e.target)) {
+        setIsVillageDropdownOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
+
+  const filteredVillageOptions = useMemo(() => {
+    let list = [...villages];
+    if (villageSearchQuery.trim()) {
+      const q = villageSearchQuery.trim().toLowerCase();
+      list = list.filter(
+        (v) =>
+          (v.name && v.name.toLowerCase().includes(q)) ||
+          (v.taluka && v.taluka.toLowerCase().includes(q)) ||
+          (v.district && v.district.toLowerCase().includes(q))
+      );
+    }
+    return list.sort((a, b) => (a.name || '').localeCompare(b.name || '', 'gu', { sensitivity: 'base' }));
+  }, [villages, villageSearchQuery]);
+
+  const updateVillageParams = (villagesList) => {
+    const params = new URLSearchParams(searchParams);
+    if (villagesList.length === 0) {
+      params.delete('villageIds');
+      params.delete('villageId');
+    } else if (villagesList.length === 1) {
+      params.set('villageId', villagesList[0]);
+      params.delete('villageIds');
+    } else {
+      params.set('villageIds', villagesList.join(','));
+      params.delete('villageId');
+    }
+    params.set('page', '1');
+    setSearchParams(params, { replace: true });
+    setPage(1);
+  };
+
+  const handleToggleVillage = (id) => {
+    const next = selectedVillages.includes(id)
+      ? selectedVillages.filter((v) => v !== id)
+      : [...selectedVillages, id];
+    setSelectedVillages(next);
+    updateVillageParams(next);
+  };
+
+  const handleSelectAllVillages = () => {
+    const allIds = villages.map((v) => v._id);
+    setSelectedVillages(allIds);
+    updateVillageParams(allIds);
+  };
+
+  const handleClearAllVillages = () => {
+    setSelectedVillages([]);
+    updateVillageParams([]);
+  };
 
   // View Details Drawer / Modal
   const [viewingMember, setViewingMember] = useState(null);
@@ -99,7 +169,7 @@ export default function Members() {
       const res = await api.get('/members', {
         params: {
           search,
-          villageId: villageFilter,
+          villageIds: selectedVillages.join(','),
           status: statusFilter,
           sortBy,
           sortOrder,
@@ -138,7 +208,7 @@ export default function Members() {
 
   useEffect(() => {
     fetchMembers(page);
-  }, [search, villageFilter, statusFilter, sortBy, sortOrder, page, limit]);
+  }, [search, selectedVillages, statusFilter, sortBy, sortOrder, page, limit]);
 
   const openAddModal = () => {
     setEditingMember(null);
@@ -244,7 +314,7 @@ export default function Members() {
     try {
       const res = await api.get('/reports/all-members/export-excel', {
         params: {
-          villageId: villageFilter,
+          villageIds: selectedVillages.join(','),
           status: statusFilter
         },
         responseType: 'blob'
@@ -266,7 +336,7 @@ export default function Members() {
       // Fallback with token in URL if blob fails
       const token = localStorage.getItem('token');
       window.open(
-        `${API_URL}/reports/all-members/export-excel?villageId=${villageFilter}&status=${statusFilter}&token=${encodeURIComponent(token || '')}`,
+        `${API_URL}/reports/all-members/export-excel?villageIds=${encodeURIComponent(selectedVillages.join(','))}&status=${statusFilter}&token=${encodeURIComponent(token || '')}`,
         '_blank'
       );
     } finally {
@@ -339,19 +409,140 @@ export default function Members() {
         </div>
 
         <div className="flex flex-wrap items-center gap-2">
-          <select
-            value={villageFilter}
-            onChange={(e) => {
-              setVillageFilter(e.target.value);
-              handlePageChange(1);
-            }}
-            className="text-xs rounded-lg border border-slate-300 px-3 py-1.5 bg-white text-slate-700"
-          >
-            <option value="">All Villages</option>
-            {villages.map((v) => (
-              <option key={v._id} value={v._id}>{v.name}</option>
-            ))}
-          </select>
+          {/* Multi-Select Village Filter Dropdown */}
+          <div className="relative" ref={villageDropdownRef}>
+            <button
+              type="button"
+              onClick={() => setIsVillageDropdownOpen((prev) => !prev)}
+              className={`inline-flex items-center justify-between gap-2 px-3 py-1.5 rounded-lg border text-xs font-medium transition cursor-pointer min-w-[170px] ${
+                selectedVillages.length > 0
+                  ? 'border-indigo-500 bg-indigo-50/70 text-indigo-900 font-bold ring-1 ring-indigo-400'
+                  : 'border-slate-300 bg-white text-slate-700 hover:bg-slate-50'
+              }`}
+              title="ગામ પસંદ કરો (Select Multiple Villages)"
+            >
+              <div className="flex items-center gap-1.5 truncate">
+                <Building2 className="h-3.5 w-3.5 text-indigo-600 shrink-0" />
+                <span className="truncate">
+                  {selectedVillages.length === 0
+                    ? 'બધા ગામ (All Villages)'
+                    : selectedVillages.length === 1
+                    ? (villages.find((x) => x._id === selectedVillages[0])?.name || '1 ગામ પસંદ')
+                    : `${selectedVillages.length} ગામ પસંદ કરેલ`}
+                </span>
+              </div>
+              <div className="flex items-center gap-1 shrink-0">
+                {selectedVillages.length > 0 && (
+                  <span className="px-1.5 py-0.2 rounded-full bg-indigo-600 text-white font-bold text-[10px]">
+                    {selectedVillages.length}
+                  </span>
+                )}
+                <ChevronDown className="h-3.5 w-3.5 text-slate-400" />
+              </div>
+            </button>
+
+            {/* Dropdown Popover */}
+            {isVillageDropdownOpen && (
+              <div className="absolute left-0 top-full mt-1.5 w-72 sm:w-80 bg-white border border-slate-200 rounded-xl shadow-xl z-50 p-3 space-y-2">
+                <div className="flex items-center justify-between border-b border-slate-100 pb-2">
+                  <span className="font-bold text-xs text-slate-800 flex items-center gap-1.5">
+                    <Building2 className="h-4 w-4 text-indigo-600" />
+                    ગામ ફિલ્ટર (Multiple Villages)
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => setIsVillageDropdownOpen(false)}
+                    className="p-1 rounded text-slate-400 hover:text-slate-600 hover:bg-slate-100"
+                  >
+                    <X className="h-3.5 w-3.5" />
+                  </button>
+                </div>
+
+                {/* Quick Search in Village List */}
+                <div className="relative">
+                  <Search className="h-3.5 w-3.5 absolute left-2.5 top-2 text-slate-400" />
+                  <input
+                    type="text"
+                    placeholder="ગામ શોધો... (Search village)"
+                    value={villageSearchQuery}
+                    onChange={(e) => setVillageSearchQuery(e.target.value)}
+                    className="w-full pl-8 pr-3 py-1 text-xs rounded-lg border border-slate-200 focus:ring-1 focus:ring-indigo-500"
+                  />
+                </div>
+
+                {/* Quick Action Buttons (Select All / Clear) */}
+                <div className="flex items-center justify-between text-[11px] px-1 pt-0.5">
+                  <button
+                    type="button"
+                    onClick={handleSelectAllVillages}
+                    className="font-bold text-indigo-600 hover:text-indigo-800 hover:underline cursor-pointer"
+                  >
+                    બધા પસંદ કરો (Select All)
+                  </button>
+                  {selectedVillages.length > 0 && (
+                    <button
+                      type="button"
+                      onClick={handleClearAllVillages}
+                      className="font-bold text-rose-600 hover:text-rose-800 hover:underline cursor-pointer"
+                    >
+                      પસંદગી રદ કરો (Clear)
+                    </button>
+                  )}
+                </div>
+
+                {/* Village Checkboxes List */}
+                <div className="max-h-60 overflow-y-auto divide-y divide-slate-100 pr-1 space-y-0.5">
+                  {filteredVillageOptions.length === 0 ? (
+                    <div className="py-4 text-center text-xs text-slate-400">કોઈ ગામ મળ્યું નથી.</div>
+                  ) : (
+                    filteredVillageOptions.map((v) => {
+                      const isChecked = selectedVillages.includes(v._id);
+                      return (
+                        <label
+                          key={v._id}
+                          className={`flex items-center justify-between p-1.5 rounded-lg cursor-pointer transition select-none ${
+                            isChecked ? 'bg-indigo-50/80 text-indigo-900 font-bold' : 'hover:bg-slate-50 text-slate-700'
+                          }`}
+                        >
+                          <div className="flex items-center gap-2 min-w-0">
+                            <input
+                              type="checkbox"
+                              checked={isChecked}
+                              onChange={() => handleToggleVillage(v._id)}
+                              className="h-3.5 w-3.5 rounded border-slate-300 text-indigo-600 focus:ring-indigo-500 cursor-pointer"
+                            />
+                            <span className="text-xs truncate">{v.name}</span>
+                            {v.taluka && (
+                              <span className="text-[10px] text-slate-400 truncate">({v.taluka})</span>
+                            )}
+                          </div>
+                          {v.memberCount !== undefined && (
+                            <span className="text-[10px] font-bold px-1.5 py-0.2 bg-slate-100 text-slate-600 rounded shrink-0 ml-1">
+                              {v.memberCount}
+                            </span>
+                          )}
+                        </label>
+                      );
+                    })
+                  )}
+                </div>
+
+                {/* Footer */}
+                <div className="pt-2 border-t border-slate-100 flex items-center justify-between text-[11px]">
+                  <span className="text-slate-500 font-medium">
+                    {selectedVillages.length} of {villages.length} પસંદ કરેલ
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => setIsVillageDropdownOpen(false)}
+                    className="px-3 py-1 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg font-bold shadow-2xs transition cursor-pointer"
+                  >
+                    Done (લાગુ કરો)
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
 
           <select
             value={statusFilter}
@@ -433,6 +624,46 @@ export default function Members() {
           </div>
         </div>
       </div>
+
+      {/* Selected Villages Filter Badges / Indicator */}
+      {selectedVillages.length > 0 && (
+        <div className="bg-indigo-50/70 border border-indigo-200 rounded-xl px-4 py-2.5 flex flex-wrap items-center justify-between gap-2 animate-fadeIn">
+          <div className="flex flex-wrap items-center gap-2">
+            <div className="flex items-center gap-1.5 text-xs font-bold text-indigo-900 mr-1">
+              <Building2 className="h-4 w-4 text-indigo-600" />
+              <span>પસંદ કરેલા ગામ ({selectedVillages.length}):</span>
+            </div>
+            <div className="flex flex-wrap items-center gap-1.5">
+              {selectedVillages.map((id) => {
+                const v = villages.find((x) => x._id === id);
+                return (
+                  <span
+                    key={id}
+                    className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-bold bg-white text-indigo-700 border border-indigo-300 shadow-2xs"
+                  >
+                    <span>{v ? v.name : id}</span>
+                    <button
+                      type="button"
+                      onClick={() => handleToggleVillage(id)}
+                      className="hover:bg-indigo-100 rounded-full p-0.5 transition text-slate-400 hover:text-indigo-800 cursor-pointer"
+                      title={`Remove ${v?.name || ''}`}
+                    >
+                      <X className="h-3 w-3" />
+                    </button>
+                  </span>
+                );
+              })}
+            </div>
+          </div>
+          <button
+            type="button"
+            onClick={handleClearAllVillages}
+            className="text-xs font-bold text-rose-600 hover:text-rose-800 hover:underline px-2 py-1 rounded transition cursor-pointer"
+          >
+            બધા હટાવો (Clear all)
+          </button>
+        </div>
+      )}
 
       {/* Members Table */}
       <div className="bg-white rounded-xl border border-slate-200 shadow-2xs overflow-hidden">

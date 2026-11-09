@@ -391,15 +391,21 @@ export default function Villages() {
           </div>
 
           <div className="flex flex-wrap items-center gap-2">
-            {/* When single village is selected, show View Members button */}
-            {selectedIds.length === 1 && (
+            {/* View Members button for single or multiple selected villages */}
+            {selectedIds.length > 0 && (
               <button
-                onClick={() => navigate(`/members?villageId=${selectedIds[0]}`)}
-                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-white border border-indigo-300 text-indigo-700 hover:bg-indigo-50 text-xs font-bold shadow-2xs transition"
-                title="આ ગામના સભ્યો જુઓ"
+                onClick={() => {
+                  if (selectedIds.length === 1) {
+                    navigate(`/members?villageId=${selectedIds[0]}`);
+                  } else {
+                    navigate(`/members?villageIds=${selectedIds.join(',')}`);
+                  }
+                }}
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-white border border-indigo-300 text-indigo-700 hover:bg-indigo-50 text-xs font-bold shadow-2xs transition cursor-pointer"
+                title={selectedIds.length === 1 ? 'આ ગામના સભ્યો જુઓ' : `પસંદ કરેલા ${selectedIds.length} ગામના સભ્યો જુઓ`}
               >
                 <Users className="h-3.5 w-3.5 text-indigo-600" />
-                <span>સભ્યો જુઓ (View Members)</span>
+                <span>સભ્યો જુઓ ({selectedIds.length > 1 ? `${selectedIds.length} ગામ` : 'View Members'})</span>
                 <ExternalLink className="h-3 w-3 text-indigo-500" />
               </button>
             )}
