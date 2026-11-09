@@ -315,7 +315,9 @@ export default function Members() {
       const res = await api.get('/reports/all-members/export-excel', {
         params: {
           villageIds: selectedVillages.join(','),
-          status: statusFilter
+          status: statusFilter,
+          sortBy,
+          sortOrder
         },
         responseType: 'blob'
       });
@@ -336,7 +338,7 @@ export default function Members() {
       // Fallback with token in URL if blob fails
       const token = localStorage.getItem('token');
       window.open(
-        `${API_URL}/reports/all-members/export-excel?villageIds=${encodeURIComponent(selectedVillages.join(','))}&status=${statusFilter}&token=${encodeURIComponent(token || '')}`,
+        `${API_URL}/reports/all-members/export-excel?villageIds=${encodeURIComponent(selectedVillages.join(','))}&status=${statusFilter}&sortBy=${sortBy}&sortOrder=${sortOrder}&token=${encodeURIComponent(token || '')}`,
         '_blank'
       );
     } finally {
