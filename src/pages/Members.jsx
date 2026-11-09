@@ -39,7 +39,7 @@ export default function Members() {
   // Search, Filters & URL-persisted Pagination
   const [searchParams, setSearchParams] = useSearchParams();
   const [search, setSearch] = useState('');
-  const [villageFilter, setVillageFilter] = useState('');
+  const [villageFilter, setVillageFilter] = useState(() => searchParams.get('villageId') || '');
   const [statusFilter, setStatusFilter] = useState('');
   const [sortBy, setSortBy] = useState('memberId');
   const [sortOrder, setSortOrder] = useState('asc'); // By default ascending order!

@@ -1,15 +1,41 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
+import { useNavigate } from 'react-router-dom';
 import api from '../api/axiosClient';
-import { Plus, Search, Edit2, Trash2, Power, MapPin, AlertCircle, CheckCircle2, X } from 'lucide-react';
+import {
+  Plus,
+  Search,
+  Edit2,
+  Trash2,
+  Power,
+  MapPin,
+  AlertCircle,
+  CheckCircle2,
+  X,
+  Users,
+  CheckSquare,
+  Square,
+  MinusSquare,
+  RotateCcw,
+  Check,
+  Building2,
+  ExternalLink
+} from 'lucide-react';
 import Modal from '../components/common/Modal';
 import Badge from '../components/common/Badge';
 
 export default function Villages() {
+  const navigate = useNavigate();
   const [villages, setVillages] = useState([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState('');
+  const [selectedVillageDropdown, setSelectedVillageDropdown] = useState('');
+  const [selectedIds, setSelectedIds] = useState([]);
+  const [bulkProcessing, setBulkProcessing] = useState(false);
   const [feedbackMsg, setFeedbackMsg] = useState({ type: '', text: '' });
+
+  // Header checkbox ref for indeterminate state
+  const headerCheckboxRef = useRef(null);
 
   // Modal state
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -42,6 +68,114 @@ export default function Villages() {
   useEffect(() => {
     fetchVillages();
   }, [search, statusFilter]);
+
+  // Client-side filtering when a specific village is picked from dropdown
+  const displayedVillages = useMemo(() => {
+    if (!selectedVillageDropdown) return villages;
+    return villages.filter(v => v._id === selectedVillageDropdown);
+  }, [villages, selectedVillageDropdown]);
+
+  // Distinct list of villages for selection dropdown (sorted by name)
+  const villageOptions = useMemo(() => {
+    return [...villages].sort((a, b) => a.name.localeCompare(b.name, 'gu', { sensitivity: 'base' }));
+  }, [villages]);
+
+  // Selection helpers
+  const isAllSelected = displayedVillages.length > 0 && displayedVillages.every(v => selectedIds.includes(v._id));
+  const isSomeSelected = displayedVillages.some(v => selectedIds.includes(v._id)) && !isAllSelected;
+
+  useEffect(() => {
+    if (headerCheckboxRef.current) {
+      headerCheckboxRef.current.indeterminate = isSomeSelected;
+    }
+  }, [isSomeSelected]);
+
+  const handleToggleSelectAll = () => {
+    if (isAllSelected) {
+      // Unselect all currently displayed
+      const displayedIdSet = new Set(displayedVillages.map(v => v._id));
+      setSelectedIds(prev => prev.filter(id => !displayedIdSet.has(id)));
+    } else {
+      // Select all currently displayed
+      const newIds = new Set([...selectedIds, ...displayedVillages.map(v => v._id)]);
+      setSelectedIds(Array.from(newIds));
+    }
+  };
+
+  const handleToggleSelect = (id) => {
+    setSelectedIds(prev =>
+      prev.includes(id) ? prev.filter(item => item !== id) : [...prev, id]
+    );
+  };
+
+  const handleClearSelection = () => {
+    setSelectedIds([]);
+  };
+
+  // Bulk Actions
+  const handleBulkStatus = async (targetStatus) => {
+    if (selectedIds.length === 0) return;
+    const actionLabel = targetStatus === 'ACTIVE' ? 'સક્રિય (ACTIVE)' : 'નિષ્ક્રિય (INACTIVE)';
+    if (!window.confirm(`શું તમે પસંદ કરેલા ${selectedIds.length} ગામને ${actionLabel} કરવા માંગો છો?`)) {
+      return;
+    }
+
+    setBulkProcessing(true);
+    try {
+      const res = await api.post('/villages/bulk-status', {
+        villageIds: selectedIds,
+        status: targetStatus
+      });
+      setFeedbackMsg({
+        type: 'success',
+        text: res.data?.message || `Selected ${selectedIds.length} village(s) updated to ${targetStatus}.`
+      });
+      setSelectedIds([]);
+      await fetchVillages();
+    } catch (err) {
+      setFeedbackMsg({
+        type: 'error',
+        text: err.response?.data?.message || 'Error updating villages status.'
+      });
+    } finally {
+      setBulkProcessing(false);
+    }
+  };
+
+  const handleBulkDelete = async () => {
+    if (selectedIds.length === 0) return;
+
+    // Check which ones have linked members
+    const busyVillages = displayedVillages.filter(v => selectedIds.includes(v._id) && v.memberCount > 0);
+    let confirmPrompt = `શું તમે પસંદ કરેલા ${selectedIds.length} ગામને ડિલીટ કરવા માંગો છો?`;
+    if (busyVillages.length > 0) {
+      confirmPrompt += `\n\nનોંધ: આમાંથી ${busyVillages.length} ગામમાં સભ્યો નોંધાયેલા હોવાથી તે ડિલીટ નહીં થાય. બાકીના ખાલી ગામ ડિલીટ થશે.`;
+    }
+
+    if (!window.confirm(confirmPrompt)) {
+      return;
+    }
+
+    setBulkProcessing(true);
+    try {
+      const res = await api.post('/villages/bulk-delete', {
+        villageIds: selectedIds
+      });
+      setFeedbackMsg({
+        type: res.data?.deletedCount > 0 ? 'success' : 'error',
+        text: res.data?.message || 'Bulk delete operation completed.'
+      });
+      setSelectedIds([]);
+      await fetchVillages();
+    } catch (err) {
+      setFeedbackMsg({
+        type: 'error',
+        text: err.response?.data?.message || 'Error deleting villages.'
+      });
+    } finally {
+      setBulkProcessing(false);
+    }
+  };
 
   const openAddModal = () => {
     setEditingVillage(null);
@@ -119,12 +253,20 @@ export default function Villages() {
       try {
         await api.delete(`/villages/${v._id}`);
         setVillages(prev => prev.filter(item => item._id !== v._id));
+        setSelectedIds(prev => prev.filter(id => id !== v._id));
         setFeedbackMsg({ type: 'success', text: `Village "${v.name}" deleted successfully.` });
         await fetchVillages();
       } catch (err) {
         alert(err.response?.data?.message || 'Error deleting village');
       }
     }
+  };
+
+  const resetAllFilters = () => {
+    setSearch('');
+    setStatusFilter('');
+    setSelectedVillageDropdown('');
+    setSelectedIds([]);
   };
 
   return (
@@ -137,16 +279,18 @@ export default function Villages() {
             Village Master Management
           </h1>
           <p className="text-xs text-slate-500 mt-1">
-            Configure native villages of 42 Gnati members with member linkages.
+            Configure native villages of 42 Gnati members with multi-selection, bulk operations, and member linkages.
           </p>
         </div>
-        <button
-          onClick={openAddModal}
-          className="inline-flex items-center gap-1.5 px-4 py-2.5 rounded-lg bg-indigo-600 text-white text-xs font-bold hover:bg-indigo-700 shadow-sm transition"
-        >
-          <Plus className="h-4 w-4" />
-          Add Village
-        </button>
+        <div className="flex items-center gap-2">
+          <button
+            onClick={openAddModal}
+            className="inline-flex items-center gap-1.5 px-4 py-2.5 rounded-lg bg-indigo-600 text-white text-xs font-bold hover:bg-indigo-700 shadow-sm transition"
+          >
+            <Plus className="h-4 w-4" />
+            Add Village
+          </button>
+        </div>
       </div>
 
       {/* Dismissible Feedback Message */}
@@ -173,31 +317,139 @@ export default function Villages() {
         </div>
       )}
 
-      {/* Filters and Search Bar */}
-      <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-2xs flex flex-col sm:flex-row gap-3 items-center justify-between">
-        <div className="relative w-full sm:w-80">
-          <Search className="h-4 w-4 absolute left-3 top-2.5 text-slate-400" />
-          <input
-            type="text"
-            placeholder="Search village name or taluka..."
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            className="w-full pl-9 pr-3 py-1.5 text-xs rounded-lg border border-slate-300 focus:ring-2 focus:ring-indigo-600 focus:border-indigo-600"
-          />
-        </div>
+      {/* Filters and Selection Bar */}
+      <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-2xs space-y-3">
+        <div className="flex flex-col md:flex-row gap-3 items-center justify-between">
+          {/* Search box */}
+          <div className="relative w-full md:w-72">
+            <Search className="h-4 w-4 absolute left-3 top-2.5 text-slate-400" />
+            <input
+              type="text"
+              placeholder="Search village name or taluka..."
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              className="w-full pl-9 pr-3 py-1.5 text-xs rounded-lg border border-slate-300 focus:ring-2 focus:ring-indigo-600 focus:border-indigo-600"
+            />
+          </div>
 
-        <div className="flex items-center gap-2 w-full sm:w-auto">
-          <select
-            value={statusFilter}
-            onChange={(e) => setStatusFilter(e.target.value)}
-            className="text-xs rounded-lg border border-slate-300 px-3 py-1.5 bg-white text-slate-700"
-          >
-            <option value="">All Statuses</option>
-            <option value="ACTIVE">Active Only</option>
-            <option value="INACTIVE">Inactive Only</option>
-          </select>
+          {/* Village Selector Dropdown */}
+          <div className="flex flex-wrap items-center gap-2 w-full md:w-auto">
+            <div className="flex items-center gap-1.5">
+              <Building2 className="h-4 w-4 text-slate-400 shrink-0" />
+              <select
+                value={selectedVillageDropdown}
+                onChange={(e) => setSelectedVillageDropdown(e.target.value)}
+                className="text-xs rounded-lg border border-slate-300 px-3 py-1.5 bg-white text-slate-700 min-w-[180px] focus:ring-2 focus:ring-indigo-600"
+                title="ગામ પસંદ કરો (Select Village)"
+              >
+                <option value="">બધા ગામ (All Villages - {villageOptions.length})</option>
+                {villageOptions.map((v) => (
+                  <option key={v._id} value={v._id}>
+                    {v.name} {v.taluka ? `(${v.taluka})` : ''} - {v.memberCount || 0} સભ્યો
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            {/* Status Filter */}
+            <select
+              value={statusFilter}
+              onChange={(e) => setStatusFilter(e.target.value)}
+              className="text-xs rounded-lg border border-slate-300 px-3 py-1.5 bg-white text-slate-700 focus:ring-2 focus:ring-indigo-600"
+            >
+              <option value="">All Statuses</option>
+              <option value="ACTIVE">Active Only</option>
+              <option value="INACTIVE">Inactive Only</option>
+            </select>
+
+            {/* Reset Filter Button */}
+            {(search || statusFilter || selectedVillageDropdown || selectedIds.length > 0) && (
+              <button
+                onClick={resetAllFilters}
+                title="Reset all filters and selection"
+                className="inline-flex items-center gap-1 text-xs px-2.5 py-1.5 rounded-lg border border-slate-300 text-slate-600 hover:bg-slate-50 transition"
+              >
+                <RotateCcw className="h-3.5 w-3.5" />
+                Reset
+              </button>
+            )}
+          </div>
         </div>
       </div>
+
+      {/* Floating Selection Action Toolbar (when >=1 village selected) */}
+      {selectedIds.length > 0 && (
+        <div className="bg-gradient-to-r from-indigo-50 via-blue-50 to-indigo-50 border-2 border-indigo-200 p-3.5 rounded-xl shadow-xs flex flex-wrap items-center justify-between gap-3 animate-fadeIn">
+          <div className="flex items-center gap-3">
+            <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-black bg-indigo-600 text-white shadow-xs">
+              <CheckSquare className="h-3.5 w-3.5" />
+              {selectedIds.length} ગામ પસંદ કરેલ ({selectedIds.length} Selected)
+            </span>
+            <span className="text-xs text-indigo-900 font-semibold hidden sm:inline">
+              તમે પસંદ કરેલા ગામ પર બલ્ક એક્શન લઈ શકો છો:
+            </span>
+          </div>
+
+          <div className="flex flex-wrap items-center gap-2">
+            {/* When single village is selected, show View Members button */}
+            {selectedIds.length === 1 && (
+              <button
+                onClick={() => navigate(`/members?villageId=${selectedIds[0]}`)}
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-white border border-indigo-300 text-indigo-700 hover:bg-indigo-50 text-xs font-bold shadow-2xs transition"
+                title="આ ગામના સભ્યો જુઓ"
+              >
+                <Users className="h-3.5 w-3.5 text-indigo-600" />
+                <span>સભ્યો જુઓ (View Members)</span>
+                <ExternalLink className="h-3 w-3 text-indigo-500" />
+              </button>
+            )}
+
+            {/* Set Active */}
+            <button
+              onClick={() => handleBulkStatus('ACTIVE')}
+              disabled={bulkProcessing}
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold shadow-2xs transition disabled:opacity-50"
+              title="પસંદ કરેલા ગામ સક્રિય કરો"
+            >
+              <CheckCircle2 className="h-3.5 w-3.5" />
+              <span>સક્રિય કરો (Set Active)</span>
+            </button>
+
+            {/* Set Inactive */}
+            <button
+              onClick={() => handleBulkStatus('INACTIVE')}
+              disabled={bulkProcessing}
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-amber-500 hover:bg-amber-600 text-white text-xs font-bold shadow-2xs transition disabled:opacity-50"
+              title="પસંદ કરેલા ગામ નિષ્ક્રિય કરો"
+            >
+              <Power className="h-3.5 w-3.5" />
+              <span>નિષ્ક્રિય કરો (Set Inactive)</span>
+            </button>
+
+            {/* Delete Selected */}
+            <button
+              onClick={handleBulkDelete}
+              disabled={bulkProcessing}
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-rose-600 hover:bg-rose-700 text-white text-xs font-bold shadow-2xs transition disabled:opacity-50"
+              title="પસંદ કરેલા ગામ ડિલીટ કરો"
+            >
+              <Trash2 className="h-3.5 w-3.5" />
+              <span>ડિલીટ કરો (Delete Selected)</span>
+            </button>
+
+            {/* Clear Selection */}
+            <button
+              onClick={handleClearSelection}
+              disabled={bulkProcessing}
+              className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-white border border-slate-300 text-slate-700 hover:bg-slate-100 text-xs font-semibold transition"
+              title="પસંદગી રદ કરો"
+            >
+              <X className="h-3.5 w-3.5 text-slate-500" />
+              <span>રદ કરો</span>
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* Villages Table */}
       <div className="bg-white rounded-xl border border-slate-200 shadow-2xs overflow-hidden">
@@ -205,6 +457,18 @@ export default function Villages() {
           <table className="w-full text-left text-xs">
             <thead className="bg-slate-50 text-slate-700 font-bold border-b border-slate-200">
               <tr>
+                {/* Select All Checkbox */}
+                <th className="py-3 px-3 w-10 text-center">
+                  <input
+                    ref={headerCheckboxRef}
+                    type="checkbox"
+                    checked={isAllSelected}
+                    onChange={handleToggleSelectAll}
+                    disabled={displayedVillages.length === 0}
+                    className="h-4 w-4 rounded border-slate-300 text-indigo-600 focus:ring-indigo-500 cursor-pointer"
+                    title={isAllSelected ? 'Deselect All' : 'Select All Displayed'}
+                  />
+                </th>
                 <th className="py-3 px-4">Village ID</th>
                 <th className="py-3 px-4">Village Name</th>
                 <th className="py-3 px-4">Taluka</th>
@@ -217,55 +481,101 @@ export default function Villages() {
             <tbody className="divide-y divide-slate-100">
               {loading ? (
                 <tr>
-                  <td colSpan="7" className="py-8 text-center text-slate-400">Loading villages...</td>
+                  <td colSpan="8" className="py-8 text-center text-slate-400">Loading villages...</td>
                 </tr>
-              ) : villages.length === 0 ? (
+              ) : displayedVillages.length === 0 ? (
                 <tr>
-                  <td colSpan="7" className="py-8 text-center text-slate-400">No villages found matching criteria.</td>
+                  <td colSpan="8" className="py-8 text-center text-slate-400">No villages found matching criteria.</td>
                 </tr>
               ) : (
-                villages.map((v) => (
-                  <tr key={v._id} className="hover:bg-slate-50/80 transition">
-                    <td className="py-3 px-4 font-mono font-bold text-slate-800">{v.villageId}</td>
-                    <td className="py-3 px-4 font-bold text-slate-900">{v.name}</td>
-                    <td className="py-3 px-4 text-slate-600">{v.taluka || '-'}</td>
-                    <td className="py-3 px-4 text-slate-600">{v.district}</td>
-                    <td className="py-3 px-4 text-center">
-                      <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-bold bg-indigo-50 text-indigo-700 border border-indigo-200">
-                        {v.memberCount} members
-                      </span>
-                    </td>
-                    <td className="py-3 px-4">
-                      <Badge status={v.status} />
-                    </td>
-                    <td className="py-3 px-4 text-right space-x-1">
-                      <button
-                        onClick={() => openEditModal(v)}
-                        title="Edit Village"
-                        className="p-1 rounded text-slate-600 hover:text-indigo-600 hover:bg-slate-100"
-                      >
-                        <Edit2 className="h-3.5 w-3.5" />
-                      </button>
-                      <button
-                        onClick={() => handleToggleStatus(v._id)}
-                        title={v.status === 'ACTIVE' ? 'Deactivate' : 'Activate'}
-                        className="p-1 rounded text-slate-600 hover:text-amber-600 hover:bg-slate-100"
-                      >
-                        <Power className="h-3.5 w-3.5" />
-                      </button>
-                      <button
-                        onClick={() => handleDelete(v)}
-                        title="Delete Village"
-                        className="p-1 rounded text-slate-600 hover:text-rose-600 hover:bg-slate-100"
-                      >
-                        <Trash2 className="h-3.5 w-3.5" />
-                      </button>
-                    </td>
-                  </tr>
-                ))
+                displayedVillages.map((v) => {
+                  const isSelected = selectedIds.includes(v._id);
+                  return (
+                    <tr
+                      key={v._id}
+                      className={`transition ${
+                        isSelected
+                          ? 'bg-indigo-50/70 hover:bg-indigo-100/60 border-l-4 border-l-indigo-600'
+                          : 'hover:bg-slate-50/80'
+                      }`}
+                    >
+                      {/* Row Checkbox */}
+                      <td className="py-3 px-3 text-center">
+                        <input
+                          type="checkbox"
+                          checked={isSelected}
+                          onChange={() => handleToggleSelect(v._id)}
+                          className="h-4 w-4 rounded border-slate-300 text-indigo-600 focus:ring-indigo-500 cursor-pointer"
+                        />
+                      </td>
+                      <td className="py-3 px-4 font-mono font-bold text-slate-800">{v.villageId}</td>
+                      <td className="py-3 px-4 font-bold text-slate-900">
+                        <span
+                          onClick={() => handleToggleSelect(v._id)}
+                          className="cursor-pointer hover:text-indigo-600"
+                        >
+                          {v.name}
+                        </span>
+                      </td>
+                      <td className="py-3 px-4 text-slate-600">{v.taluka || '-'}</td>
+                      <td className="py-3 px-4 text-slate-600">{v.district}</td>
+                      <td className="py-3 px-4 text-center">
+                        <button
+                          onClick={() => navigate(`/members?villageId=${v._id}`)}
+                          title={`Click to view ${v.memberCount || 0} member(s) of ${v.name}`}
+                          className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-bold bg-indigo-50 text-indigo-700 border border-indigo-200 hover:bg-indigo-100 hover:border-indigo-300 transition"
+                        >
+                          <Users className="h-3 w-3" />
+                          <span>{v.memberCount || 0} members</span>
+                        </button>
+                      </td>
+                      <td className="py-3 px-4">
+                        <Badge status={v.status} />
+                      </td>
+                      <td className="py-3 px-4 text-right space-x-1">
+                        <button
+                          onClick={() => openEditModal(v)}
+                          title="Edit Village"
+                          className="p-1.5 rounded text-slate-600 hover:text-indigo-600 hover:bg-slate-100"
+                        >
+                          <Edit2 className="h-3.5 w-3.5" />
+                        </button>
+                        <button
+                          onClick={() => handleToggleStatus(v._id)}
+                          title={v.status === 'ACTIVE' ? 'Deactivate' : 'Activate'}
+                          className="p-1.5 rounded text-slate-600 hover:text-amber-600 hover:bg-slate-100"
+                        >
+                          <Power className="h-3.5 w-3.5" />
+                        </button>
+                        <button
+                          onClick={() => handleDelete(v)}
+                          title="Delete Village"
+                          className="p-1.5 rounded text-slate-600 hover:text-rose-600 hover:bg-slate-100"
+                        >
+                          <Trash2 className="h-3.5 w-3.5" />
+                        </button>
+                      </td>
+                    </tr>
+                  );
+                })
               )}
             </tbody>
           </table>
+        </div>
+
+        {/* Table summary footer */}
+        <div className="px-4 py-3 bg-slate-50 border-t border-slate-200 flex items-center justify-between text-xs text-slate-500">
+          <div>
+            Showing <span className="font-bold text-slate-700">{displayedVillages.length}</span> village(s)
+            {selectedVillageDropdown && (
+              <span className="ml-1 text-indigo-600 font-semibold">(Filtered by selected village)</span>
+            )}
+          </div>
+          {selectedIds.length > 0 && (
+            <div className="font-semibold text-indigo-700">
+              {selectedIds.length} of {displayedVillages.length} selected
+            </div>
+          )}
         </div>
       </div>
 
