@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import api, { API_URL } from '../api/axiosClient';
 import {
   Users,
@@ -35,13 +36,14 @@ export default function Members() {
   const [loading, setLoading] = useState(true);
   const [isImportModalOpen, setIsImportModalOpen] = useState(false);
 
-  // Search & Filters
+  // Search, Filters & URL-persisted Pagination
+  const [searchParams, setSearchParams] = useSearchParams();
   const [search, setSearch] = useState('');
   const [villageFilter, setVillageFilter] = useState('');
   const [statusFilter, setStatusFilter] = useState('');
   const [sortBy, setSortBy] = useState('memberId');
   const [sortOrder, setSortOrder] = useState('asc'); // By default ascending order!
-  const [page, setPage] = useState(1);
+  const [page, setPage] = useState(() => parseInt(searchParams.get('page') || '1', 10));
   const [limit, setLimit] = useState(25);
   const [totalPages, setTotalPages] = useState(1);
   const [total, setTotal] = useState(0);
@@ -84,7 +86,14 @@ export default function Members() {
     }
   };
 
-  const fetchMembers = async () => {
+  const handlePageChange = (newPage) => {
+    setPage(newPage);
+    const params = new URLSearchParams(searchParams);
+    params.set('page', newPage.toString());
+    setSearchParams(params, { replace: true });
+  };
+
+  const fetchMembers = async (targetPage = page) => {
     setLoading(true);
     try {
       const res = await api.get('/members', {
@@ -94,7 +103,7 @@ export default function Members() {
           status: statusFilter,
           sortBy,
           sortOrder,
-          page,
+          page: targetPage,
           limit
         }
       });
@@ -110,7 +119,7 @@ export default function Members() {
 
   const handleLimitChange = (newLimit) => {
     setLimit(Number(newLimit));
-    setPage(1);
+    handlePageChange(1);
   };
 
   const handleSort = (field) => {
@@ -120,7 +129,7 @@ export default function Members() {
       setSortBy(field);
       setSortOrder('asc'); // Default to ascending when switching field
     }
-    setPage(1);
+    handlePageChange(1);
   };
 
   useEffect(() => {
@@ -128,7 +137,7 @@ export default function Members() {
   }, []);
 
   useEffect(() => {
-    fetchMembers();
+    fetchMembers(page);
   }, [search, villageFilter, statusFilter, sortBy, sortOrder, page, limit]);
 
   const openAddModal = () => {
@@ -138,7 +147,7 @@ export default function Members() {
       fullName: '',
       mobileNumber: '',
       email: '',
-      villageId: villages[0]?._id || '',
+      villageId: '',
       dob: '',
       joiningDate: new Date().toISOString().split('T')[0],
       occupation: '',
@@ -188,7 +197,8 @@ export default function Members() {
         await api.post('/members', formData);
       }
       setIsFormModalOpen(false);
-      fetchMembers();
+      // Stay on the exact same page!
+      await fetchMembers(page);
     } catch (err) {
       setFormError(err.response?.data?.message || 'Error saving member.');
     } finally {
@@ -214,7 +224,13 @@ export default function Members() {
     if (window.confirm(`Are you sure you want to permanently delete member ${m.memberId} (${m.fullName})?`)) {
       try {
         await api.delete(`/members/${m._id}`);
-        fetchMembers();
+        // If this was the last member on this page and we are past page 1, go to previous page
+        const targetPage = members.length === 1 && page > 1 ? page - 1 : page;
+        if (targetPage !== page) {
+          handlePageChange(targetPage);
+        } else {
+          await fetchMembers(targetPage);
+        }
       } catch (err) {
         alert(err.response?.data?.message || 'Cannot delete member.');
       }
@@ -273,7 +289,7 @@ export default function Members() {
             value={search}
             onChange={(e) => {
               setSearch(e.target.value);
-              setPage(1);
+              handlePageChange(1);
             }}
             className="w-full pl-9 pr-3 py-1.5 text-xs rounded-lg border border-slate-300 focus:ring-2 focus:ring-indigo-600"
           />
@@ -284,7 +300,7 @@ export default function Members() {
             value={villageFilter}
             onChange={(e) => {
               setVillageFilter(e.target.value);
-              setPage(1);
+              handlePageChange(1);
             }}
             className="text-xs rounded-lg border border-slate-300 px-3 py-1.5 bg-white text-slate-700"
           >
@@ -298,7 +314,7 @@ export default function Members() {
             value={statusFilter}
             onChange={(e) => {
               setStatusFilter(e.target.value);
-              setPage(1);
+              handlePageChange(1);
             }}
             className="text-xs rounded-lg border border-slate-300 px-3 py-1.5 bg-white text-slate-700"
           >
@@ -318,7 +334,7 @@ export default function Members() {
                 const [f, o] = e.target.value.split(':');
                 setSortBy(f);
                 setSortOrder(o);
-                setPage(1);
+                handlePageChange(1);
               }}
               className="text-xs font-semibold rounded border border-slate-300 px-2 py-0.5 bg-white text-slate-800 focus:ring-1 focus:ring-indigo-500"
             >
@@ -335,7 +351,7 @@ export default function Members() {
               type="button"
               onClick={() => {
                 setSortOrder((prev) => (prev === 'asc' ? 'desc' : 'asc'));
-                setPage(1);
+                handlePageChange(1);
               }}
               className={`inline-flex items-center gap-1 px-2 py-0.5 rounded text-[11px] font-bold transition border cursor-pointer ${
                 sortOrder === 'asc'
@@ -479,7 +495,7 @@ export default function Members() {
           totalPages={totalPages}
           total={total}
           limit={limit}
-          onPageChange={setPage}
+          onPageChange={handlePageChange}
           onLimitChange={handleLimitChange}
         />
       </div>
@@ -489,7 +505,7 @@ export default function Members() {
         isOpen={isFormModalOpen}
         onClose={() => setIsFormModalOpen(false)}
         title={editingMember ? `Edit Member: ${editingMember.memberId}` : 'Register New Member / Family Head'}
-        subtitle="Mandatory fields are marked with *. Identity numbers are stored securely and masked in public views."
+        subtitle="Full Name is required. All other personal and village fields are optional."
         maxWidth="max-w-3xl"
       >
         {formError && (
@@ -532,15 +548,14 @@ export default function Members() {
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
             <div>
               <label className="block font-bold text-slate-700 mb-1">
-                Village <span className="text-rose-500">*</span>
+                Village <span className="text-slate-400 font-normal text-[11px]">(Optional)</span>
               </label>
               <select
-                required
                 value={formData.villageId}
                 onChange={(e) => setFormData({ ...formData, villageId: e.target.value })}
                 className="w-full px-3 py-2 rounded-lg border border-slate-300 bg-white"
               >
-                <option value="">Select Village</option>
+                <option value="">Select Village (Optional)</option>
                 {villages.map((v) => (
                   <option key={v._id} value={v._id}>{v.name} ({v.district})</option>
                 ))}
@@ -549,11 +564,10 @@ export default function Members() {
 
             <div>
               <label className="block font-bold text-slate-700 mb-1">
-                Date of Birth <span className="text-rose-500">*</span>
+                Date of Birth <span className="text-slate-400 font-normal text-[11px]">(Optional)</span>
               </label>
               <input
                 type="date"
-                required
                 value={formData.dob}
                 onChange={(e) => setFormData({ ...formData, dob: e.target.value })}
                 className="w-full px-3 py-2 rounded-lg border border-slate-300"
