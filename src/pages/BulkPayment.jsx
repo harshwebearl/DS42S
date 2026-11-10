@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import api from '../api/axiosClient';
+import { fetchAllMembers } from '../utils/memberApi';
 import {
   Users2,
   Search,
@@ -32,7 +33,7 @@ export default function BulkPayment() {
   const [payerMobile, setPayerMobile] = useState('');
   const [paymentDate, setPaymentDate] = useState(new Date().toISOString().split('T')[0]);
   const [paymentMode, setPaymentMode] = useState('CHEQUE');
-  const [totalAmountRupees, setTotalAmountRupees] = useState('5000');
+  const [totalAmountRupees, setTotalAmountRupees] = useState('');
   const [chequeDetails, setChequeDetails] = useState({
     chequeNumber: '',
     bankName: '',
@@ -54,11 +55,11 @@ export default function BulkPayment() {
 
   useEffect(() => {
     Promise.all([
-      api.get('/members?limit=200'),
+      fetchAllMembers(),
       api.get('/villages'),
       api.get('/installments')
     ]).then(([memRes, vilRes, instRes]) => {
-      setAllMembers(memRes.data.members || []);
+      setAllMembers(memRes);
       setVillages(vilRes.data.villages || []);
       setActiveInstallments(instRes.data.installments || []);
     });
@@ -433,7 +434,7 @@ export default function BulkPayment() {
               required
               value={totalAmountRupees}
               onChange={(e) => setTotalAmountRupees(e.target.value)}
-              placeholder="5000"
+              placeholder="Enter total amount"
               className="w-full px-3 py-2 text-base font-black text-indigo-700 rounded-lg border border-slate-300 font-mono"
             />
           </div>
@@ -547,7 +548,7 @@ export default function BulkPayment() {
           </div>
 
           <div className="max-h-80 overflow-y-auto divide-y divide-slate-100 border border-slate-200 rounded-lg">
-            {availableMembers.slice(0, 15).map((m) => (
+            {availableMembers.map((m) => (
               <div
                 key={m._id}
                 onClick={() => handleAddMember(m)}

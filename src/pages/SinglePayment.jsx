@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import api from '../api/axiosClient';
+import { fetchAllMembers } from '../utils/memberApi';
 import { CreditCard, Search, CheckCircle2, AlertCircle, Printer, RefreshCw, CheckSquare, Square, ShieldOff } from 'lucide-react';
 import Modal from '../components/common/Modal';
 import SinglePaymentReceipt from '../components/receipts/SinglePaymentReceipt';
@@ -37,9 +38,7 @@ export default function SinglePayment() {
   const [submitting, setSubmitting] = useState(false);
 
   useEffect(() => {
-    api.get('/members?limit=100').then((res) => {
-      setMembers(res.data.members || []);
-    });
+    fetchAllMembers().then(setMembers);
   }, []);
 
   const handleSelectMember = async (member) => {
@@ -241,7 +240,7 @@ export default function SinglePayment() {
           </div>
 
           <div className="max-h-56 overflow-y-auto divide-y divide-slate-100 border border-slate-200 rounded-lg">
-            {filteredMembers.slice(0, 10).map((m) => (
+            {filteredMembers.map((m) => (
               <div
                 key={m._id}
                 onClick={() => handleSelectMember(m)}

@@ -43,7 +43,7 @@ export default function Villages() {
   const [formData, setFormData] = useState({
     name: '',
     taluka: '',
-    district: 'Bhavnagar',
+    district: '',
     state: 'Gujarat',
     description: '',
     status: 'ACTIVE'
@@ -182,7 +182,7 @@ export default function Villages() {
     setFormData({
       name: '',
       taluka: '',
-      district: 'Bhavnagar',
+      district: '',
       state: 'Gujarat',
       description: '',
       status: 'ACTIVE'
@@ -196,7 +196,7 @@ export default function Villages() {
     setFormData({
       name: v.name,
       taluka: v.taluka || '',
-      district: v.district || 'Bhavnagar',
+      district: v.district || '',
       state: v.state || 'Gujarat',
       description: v.description || '',
       status: v.status
