@@ -318,7 +318,16 @@ export default function BulkPayment() {
       }
     }
 
-    if (paymentMode === 'CHEQUE' && (!chequeDetails.chequeNumber || !chequeDetails.bankName || !chequeDetails.bankAccountNumber.trim())) {
+    const normalizedChequeDetails = paymentMode === 'CHEQUE'
+      ? {
+          ...chequeDetails,
+          chequeNumber: chequeDetails.chequeNumber.trim(),
+          bankName: chequeDetails.bankName.trim(),
+          bankAccountNumber: chequeDetails.bankAccountNumber.trim()
+        }
+      : undefined;
+
+    if (paymentMode === 'CHEQUE' && (!normalizedChequeDetails.chequeNumber || !normalizedChequeDetails.bankName || !normalizedChequeDetails.bankAccountNumber)) {
       setErrorMsg('Cheque Number, Bank Name, and Bank Account Number are required for cheque payments.');
       return;
     }
@@ -333,7 +342,7 @@ export default function BulkPayment() {
         totalAmountRupees: totalReceived,
         referenceNumber,
         remarks,
-        chequeDetails: paymentMode === 'CHEQUE' ? chequeDetails : undefined,
+        chequeDetails: normalizedChequeDetails,
         allocations: allocatedRows.map((r) => ({
           memberId: r.memberId,
           amountRupees: parseFloat(r.amountRupees),
@@ -443,8 +452,8 @@ export default function BulkPayment() {
         </div>
 
         {/* Mode Selector */}
-        <div className="grid grid-cols-1 gap-4 pt-1 text-xs sm:grid-cols-2 lg:grid-cols-5">
-          <div>
+        <div className="space-y-4 pt-1 text-xs">
+          <div className="max-w-xs">
             <label className="block font-bold text-slate-700 mb-1">Payment Mode</label>
             <div className="grid grid-cols-2 gap-2">
               {['CHEQUE', 'BANK_TRANSFER', 'UPI', 'CASH'].map((m) => (
@@ -465,7 +474,7 @@ export default function BulkPayment() {
           </div>
 
           {paymentMode === 'CHEQUE' ? (
-            <>
+            <div className="grid grid-cols-1 gap-4 rounded-lg border border-amber-200 bg-amber-50/40 p-3 sm:grid-cols-2 lg:grid-cols-4">
               <div>
                 <label className="block font-bold text-slate-700 mb-1">
                   Cheque Number <span className="text-rose-500">*</span>
@@ -499,8 +508,12 @@ export default function BulkPayment() {
                 <input
                   type="text"
                   required
+                  id="bulk-cheque-bank-account-number"
+                  name="bankAccountNumber"
+                  autoComplete="off"
                   value={chequeDetails.bankAccountNumber}
                   onChange={(e) => setChequeDetails({ ...chequeDetails, bankAccountNumber: e.target.value })}
+                  placeholder="Enter bank account number"
                   className="w-full px-3 py-2 rounded-lg border border-slate-300 bg-amber-50/50 font-mono"
                 />
               </div>
@@ -513,9 +526,9 @@ export default function BulkPayment() {
                   className="w-full px-3 py-2 rounded-lg border border-slate-300 bg-amber-50/50"
                 />
               </div>
-            </>
+            </div>
           ) : (
-            <div className="sm:col-span-3">
+            <div className="max-w-xl">
               <label className="block font-bold text-slate-700 mb-1">Bank UTR / Transaction Reference</label>
               <input
                 type="text"

@@ -558,6 +558,7 @@ export default function Members() {
             <option value="ACTIVE">ACTIVE</option>
             <option value="INACTIVE">INACTIVE</option>
             <option value="DECEASED">DECEASED</option>
+            <option value="CANCELLED">CANCELLED</option>
           </select>
 
           {/* Sorting Filter: Ascending / Descending with default Ascending */}
@@ -948,6 +949,7 @@ export default function Members() {
                 <option value="ACTIVE">ACTIVE</option>
                 <option value="INACTIVE">INACTIVE</option>
                 <option value="DECEASED">DECEASED</option>
+                <option value="CANCELLED">CANCELLED</option>
               </select>
             </div>
             <div>
