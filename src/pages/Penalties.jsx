@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import api from '../api/axiosClient';
+import { fetchAllMembers } from '../utils/memberApi';
 import { AlertTriangle, Plus, ShieldCheck, UserX, AlertCircle, CheckCircle2, Edit, Trash2, Power, HelpCircle } from 'lucide-react';
 import Modal from '../components/common/Modal';
 import Badge from '../components/common/Badge';
@@ -62,13 +63,12 @@ export default function Penalties() {
   useEffect(() => {
     Promise.all([
       api.get('/penalties/masters'),
-      api.get('/members?limit=100')
-    ]).then(([pmRes, memRes]) => {
+      fetchAllMembers()
+    ]).then(([pmRes, memberList]) => {
       setPenaltyMasters(pmRes.data.penaltyMasters || []);
-      const mList = memRes.data.members || [];
-      setMembers(mList);
-      if (mList.length > 0) {
-        setSelectedMemberId(mList[0]._id);
+      setMembers(memberList);
+      if (memberList.length > 0) {
+        setSelectedMemberId(memberList[0]._id);
       }
       setLoading(false);
     });

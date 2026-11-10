@@ -37,6 +37,7 @@ export default function BulkPayment() {
   const [chequeDetails, setChequeDetails] = useState({
     chequeNumber: '',
     bankName: '',
+    bankAccountNumber: '',
     chequeDate: new Date().toISOString().split('T')[0]
   });
   const [referenceNumber, setReferenceNumber] = useState('');
@@ -72,7 +73,7 @@ export default function BulkPayment() {
       return false;
     }
     if (memberSearchQuery) {
-      const q = memberSearchQuery.toLowerCase();
+      const q = memberSearchQuery.trim().toLowerCase();
       const matchName = m.fullName.toLowerCase().includes(q);
       const matchId = m.memberId.toLowerCase().includes(q);
       const matchMobile = (m.mobileNumber || '').includes(q);
@@ -80,6 +81,7 @@ export default function BulkPayment() {
     }
     return true;
   });
+  const canSearchMembers = memberSearchQuery.trim().length >= 3;
 
   // Add Member to allocation grid with installment selection
   const handleAddMember = async (member) => {
@@ -316,8 +318,8 @@ export default function BulkPayment() {
       }
     }
 
-    if (paymentMode === 'CHEQUE' && (!chequeDetails.chequeNumber || !chequeDetails.bankName)) {
-      setErrorMsg('Cheque Number and Bank Name are required for cheque payments.');
+    if (paymentMode === 'CHEQUE' && (!chequeDetails.chequeNumber || !chequeDetails.bankName || !chequeDetails.bankAccountNumber.trim())) {
+      setErrorMsg('Cheque Number, Bank Name, and Bank Account Number are required for cheque payments.');
       return;
     }
 
@@ -491,6 +493,18 @@ export default function BulkPayment() {
                 />
               </div>
               <div>
+                <label className="block font-bold text-slate-700 mb-1">
+                  Bank Account Number <span className="text-rose-500">*</span>
+                </label>
+                <input
+                  type="text"
+                  required
+                  value={chequeDetails.bankAccountNumber}
+                  onChange={(e) => setChequeDetails({ ...chequeDetails, bankAccountNumber: e.target.value })}
+                  className="w-full px-3 py-2 rounded-lg border border-slate-300 bg-amber-50/50 font-mono"
+                />
+              </div>
+              <div>
                 <label className="block font-bold text-slate-700 mb-1">Cheque Date</label>
                 <input
                   type="date"
@@ -548,7 +562,12 @@ export default function BulkPayment() {
           </div>
 
           <div className="max-h-80 overflow-y-auto divide-y divide-slate-100 border border-slate-200 rounded-lg">
-            {availableMembers.map((m) => (
+            {!canSearchMembers ? (
+              <p className="p-4 text-center text-xs text-slate-400">Type at least 3 characters to search members.</p>
+            ) : availableMembers.length === 0 ? (
+              <p className="p-4 text-center text-xs text-slate-400">No more members match your search.</p>
+            ) : null}
+            {canSearchMembers && availableMembers.map((m) => (
               <div
                 key={m._id}
                 onClick={() => handleAddMember(m)}
@@ -571,9 +590,6 @@ export default function BulkPayment() {
                 </button>
               </div>
             ))}
-            {availableMembers.length === 0 && (
-              <p className="p-4 text-center text-xs text-slate-400">No more members to add.</p>
-            )}
           </div>
         </div>
 

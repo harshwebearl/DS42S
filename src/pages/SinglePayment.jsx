@@ -27,6 +27,7 @@ export default function SinglePayment() {
   const [chequeDetails, setChequeDetails] = useState({
     chequeNumber: '',
     bankName: '',
+    bankAccountNumber: '',
     chequeDate: new Date().toISOString().split('T')[0]
   });
   const [remarks, setRemarks] = useState('');
@@ -155,6 +156,10 @@ export default function SinglePayment() {
       setErrorMsg('Payment amount must be greater than zero.');
       return;
     }
+    if (paymentMode === 'CHEQUE' && !chequeDetails.bankAccountNumber.trim()) {
+      setErrorMsg('Bank Account Number is required for cheque payments.');
+      return;
+    }
 
     setErrorMsg('');
     setSubmitting(true);
@@ -189,7 +194,8 @@ export default function SinglePayment() {
   };
 
   const filteredMembers = members.filter((m) => {
-    const q = searchMember.toLowerCase();
+    const q = searchMember.trim().toLowerCase();
+    if (q.length < 3) return false;
     return m.fullName.toLowerCase().includes(q) || m.memberId.toLowerCase().includes(q);
   });
 
@@ -240,6 +246,11 @@ export default function SinglePayment() {
           </div>
 
           <div className="max-h-56 overflow-y-auto divide-y divide-slate-100 border border-slate-200 rounded-lg">
+            {searchMember.trim().length < 3 ? (
+              <p className="p-4 text-center text-xs text-slate-400">Type at least 3 characters to search members.</p>
+            ) : filteredMembers.length === 0 ? (
+              <p className="p-4 text-center text-xs text-slate-400">No members match your search.</p>
+            ) : null}
             {filteredMembers.map((m) => (
               <div
                 key={m._id}
@@ -657,6 +668,18 @@ export default function SinglePayment() {
                     onChange={(e) => setChequeDetails({ ...chequeDetails, bankName: e.target.value })}
                     placeholder="e.g. SBI, Mahuva"
                     className="w-full px-3 py-2 rounded-lg border border-slate-300 bg-white"
+                  />
+                </div>
+                <div>
+                  <label className="block font-bold text-slate-700 mb-1">
+                    Bank Account Number <span className="text-rose-500">*</span>
+                  </label>
+                  <input
+                    type="text"
+                    required
+                    value={chequeDetails.bankAccountNumber}
+                    onChange={(e) => setChequeDetails({ ...chequeDetails, bankAccountNumber: e.target.value })}
+                    className="w-full px-3 py-2 rounded-lg border border-slate-300 bg-white font-mono"
                   />
                 </div>
                 <div>

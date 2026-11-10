@@ -218,6 +218,11 @@ export default function ChequeClearance() {
                       <p className="text-[11px] text-slate-500 font-medium">
                         {c.chequeDetails?.bankName} (Dated: {c.chequeDetails?.chequeDate ? new Date(c.chequeDetails.chequeDate).toLocaleDateString() : '-'})
                       </p>
+                      {c.chequeDetails?.bankAccountNumber && (
+                        <p className="text-[10px] text-slate-500 font-mono">
+                          Account: {c.chequeDetails.bankAccountNumber}
+                        </p>
+                      )}
                     </td>
 
                     <td className="py-3 px-4">

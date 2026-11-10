@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import api from '../api/axiosClient';
+import { fetchAllMembers } from '../utils/memberApi';
 import {
   HeartCrack,
   Plus,
@@ -27,6 +28,7 @@ export default function DeathClaims() {
   // Register Claim Modal
   const [isRegisterModalOpen, setIsRegisterModalOpen] = useState(false);
   const [selectedMemberId, setSelectedMemberId] = useState('');
+  const [memberSearchQuery, setMemberSearchQuery] = useState('');
   const [dateOfDeath, setDateOfDeath] = useState(new Date().toISOString().split('T')[0]);
   const [nomineeId, setNomineeId] = useState('');
   const [nomineeList, setNomineeList] = useState([]);
@@ -63,10 +65,11 @@ export default function DeathClaims() {
 
   useEffect(() => {
     fetchClaims();
-    api.get('/members?limit=200').then((res) => {
-      setMembers(res.data.members || []);
-    });
   }, [statusFilter]);
+
+  useEffect(() => {
+    fetchAllMembers().then(setMembers);
+  }, []);
 
   // When member or date of death changes, calculate pre-flight eligibility
   useEffect(() => {
@@ -93,7 +96,10 @@ export default function DeathClaims() {
 
   const handleRegisterSubmit = async (e) => {
     e.preventDefault();
-    if (!selectedMemberId) return;
+    if (!selectedMemberId) {
+      setModalError('Search for and select a member before submitting.');
+      return;
+    }
     setModalError('');
     setSubmitting(true);
 
@@ -117,6 +123,14 @@ export default function DeathClaims() {
       setSubmitting(false);
     }
   };
+
+  const matchingMembers = members.filter((member) => {
+    const query = memberSearchQuery.trim().toLowerCase();
+    return query.length >= 3 && (
+      member.fullName.toLowerCase().includes(query) ||
+      member.memberId.toLowerCase().includes(query)
+    );
+  });
 
   const handleReviewSubmit = async (e) => {
     e.preventDefault();
@@ -157,7 +171,11 @@ export default function DeathClaims() {
         </div>
         <button
           onClick={() => {
-            setSelectedMemberId(members[0]?._id || '');
+            setSelectedMemberId('');
+            setMemberSearchQuery('');
+            setEvaluation(null);
+            setNomineeId('');
+            setNomineeList([]);
             setDeathCertFile(null);
             setModalError('');
             setIsRegisterModalOpen(true);
@@ -292,18 +310,46 @@ export default function DeathClaims() {
               <label className="block font-bold text-slate-700 mb-1">
                 Deceased Member <span className="text-rose-500">*</span>
               </label>
-              <select
-                required
-                value={selectedMemberId}
-                onChange={(e) => setSelectedMemberId(e.target.value)}
-                className="w-full px-3 py-2 rounded-lg border border-slate-300 bg-white"
-              >
-                {members.map((m) => (
-                  <option key={m._id} value={m._id}>
-                    {m.memberId} — {m.fullName}
-                  </option>
-                ))}
-              </select>
+              <div className="relative">
+                <Search className="h-4 w-4 absolute left-3 top-2.5 text-slate-400" />
+                <input
+                  type="search"
+                  value={memberSearchQuery}
+                  onChange={(e) => {
+                    setMemberSearchQuery(e.target.value);
+                    setSelectedMemberId('');
+                    setEvaluation(null);
+                    setNomineeId('');
+                    setNomineeList([]);
+                  }}
+                  placeholder="Type at least 3 characters to search members..."
+                  className="w-full pl-9 pr-3 py-2 rounded-lg border border-slate-300 bg-white"
+                />
+              </div>
+              {memberSearchQuery.trim().length >= 3 && (
+                <div className="mt-1 max-h-40 overflow-y-auto divide-y divide-slate-100 border border-slate-200 rounded-lg">
+                  {matchingMembers.length === 0 ? (
+                    <p className="p-3 text-center text-xs text-slate-400">No members match your search.</p>
+                  ) : matchingMembers.map((member) => (
+                    <button
+                      type="button"
+                      key={member._id}
+                      onClick={() => {
+                        setSelectedMemberId(member._id);
+                        setMemberSearchQuery('');
+                      }}
+                      className="w-full px-3 py-2 text-left text-xs hover:bg-rose-50"
+                    >
+                      {member.memberId} — {member.fullName}
+                    </button>
+                  ))}
+                </div>
+              )}
+              {selectedMemberId && (
+                <p className="mt-1 text-xs font-semibold text-rose-700">
+                  Selected: {members.find((member) => member._id === selectedMemberId)?.memberId} — {members.find((member) => member._id === selectedMemberId)?.fullName}
+                </p>
+              )}
             </div>
 
             <div>

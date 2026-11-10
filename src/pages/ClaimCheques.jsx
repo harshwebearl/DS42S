@@ -25,6 +25,7 @@ export default function ClaimCheques() {
     claimId: '',
     beneficiaryName: '',
     bankName: '',
+    bankAccountNumber: '',
     chequeNumber: '',
     chequeAmountRupees: 100000,
     issueDate: new Date().toISOString().split('T')[0],
@@ -229,6 +230,9 @@ export default function ClaimCheques() {
                     <td className="py-3 px-4 font-mono">
                       <p className="font-bold text-slate-900">#{c.chequeNumber}</p>
                       <p className="text-[10px] text-slate-500 font-sans">{c.bankName}</p>
+                      {c.bankAccountNumber && (
+                        <p className="text-[10px] text-slate-500 font-mono">Account: {c.bankAccountNumber}</p>
+                      )}
                     </td>
                     <td className="py-3 px-4 text-right font-black font-mono text-sm text-indigo-700">
                       {c.formattedAmount}
@@ -339,7 +343,7 @@ export default function ClaimCheques() {
             </div>
           </div>
 
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
             <div>
               <label className="block font-bold text-slate-700 mb-1">
                 Bank Name <span className="text-rose-500">*</span>
@@ -351,6 +355,18 @@ export default function ClaimCheques() {
                 onChange={(e) => setIssueForm({ ...issueForm, bankName: e.target.value })}
                 placeholder="e.g. State Bank of India, Bhavnagar"
                 className="w-full px-3 py-2 rounded-lg border border-slate-300"
+              />
+            </div>
+            <div>
+              <label className="block font-bold text-slate-700 mb-1">
+                Bank Account Number <span className="text-rose-500">*</span>
+              </label>
+              <input
+                type="text"
+                required
+                value={issueForm.bankAccountNumber}
+                onChange={(e) => setIssueForm({ ...issueForm, bankAccountNumber: e.target.value })}
+                className="w-full px-3 py-2 rounded-lg border border-slate-300 font-mono"
               />
             </div>
             <div>

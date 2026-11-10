@@ -17,6 +17,7 @@ import Penalties from './pages/Penalties';
 import SinglePayment from './pages/SinglePayment';
 import BulkPayment from './pages/BulkPayment';
 import ChequeClearance from './pages/ChequeClearance';
+import PaymentManagement from './pages/PaymentManagement';
 import MemberLedger from './pages/MemberLedger';
 import DeathClaims from './pages/DeathClaims';
 import ClaimCheques from './pages/ClaimCheques';
@@ -67,6 +68,7 @@ export default function App() {
             <Route path="single-payment" element={<SinglePayment />} />
             <Route path="bulk-payment" element={<BulkPayment />} />
             <Route path="cheque-clearance" element={<ChequeClearance />} />
+            <Route path="payments" element={<PaymentManagement />} />
             <Route path="member-ledger" element={<MemberLedger />} />
             <Route path="death-claims" element={<DeathClaims />} />
             <Route path="claim-cheques" element={<ClaimCheques />} />

@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import api from '../api/axiosClient';
+import { fetchAllMembers } from '../utils/memberApi';
 import { UserCheck, Plus, Search, Edit2, Power, AlertCircle, History } from 'lucide-react';
 import Modal from '../components/common/Modal';
 import Badge from '../components/common/Badge';
@@ -7,6 +8,7 @@ import Badge from '../components/common/Badge';
 export default function Nominees() {
   const [members, setMembers] = useState([]);
   const [selectedMemberId, setSelectedMemberId] = useState('');
+  const [memberSearch, setMemberSearch] = useState('');
   const [nominees, setNominees] = useState([]);
   const [loading, setLoading] = useState(false);
 
@@ -28,12 +30,7 @@ export default function Nominees() {
   const [submitting, setSubmitting] = useState(false);
 
   useEffect(() => {
-    api.get('/members?limit=100').then((res) => {
-      setMembers(res.data.members || []);
-      if (res.data.members?.length > 0) {
-        setSelectedMemberId(res.data.members[0]._id);
-      }
-    });
+    fetchAllMembers().then(setMembers);
   }, []);
 
   const fetchNominees = async () => {
@@ -116,6 +113,13 @@ export default function Nominees() {
   };
 
   const selectedMemberObj = members.find((m) => m._id === selectedMemberId);
+  const matchingMembers = members.filter((member) => {
+    const query = memberSearch.trim().toLowerCase();
+    return query.length >= 3 && (
+      member.fullName.toLowerCase().includes(query) ||
+      member.memberId.toLowerCase().includes(query)
+    );
+  });
 
   return (
     <div className="space-y-6">
@@ -146,17 +150,43 @@ export default function Nominees() {
           <label className="block text-[11px] font-bold uppercase tracking-wider text-slate-500 mb-1">
             Select Member to View / Edit Nominees
           </label>
-          <select
-            value={selectedMemberId}
-            onChange={(e) => setSelectedMemberId(e.target.value)}
-            className="w-full px-3 py-2 text-xs rounded-lg border border-slate-300 bg-white font-medium"
-          >
-            {members.map((m) => (
-              <option key={m._id} value={m._id}>
-                {m.memberId} — {m.fullName} ({m.villageId?.name || 'Village'})
-              </option>
-            ))}
-          </select>
+          <div className="relative">
+            <Search className="h-4 w-4 absolute left-3 top-2.5 text-slate-400" />
+            <input
+              type="search"
+              value={memberSearch}
+              onChange={(e) => {
+                setMemberSearch(e.target.value);
+                setSelectedMemberId('');
+              }}
+              placeholder="Type at least 3 characters to search members..."
+              className="w-full pl-9 pr-3 py-2 text-xs rounded-lg border border-slate-300 bg-white font-medium"
+            />
+          </div>
+          {memberSearch.trim().length >= 3 && (
+            <div className="mt-1 max-h-48 overflow-y-auto divide-y divide-slate-100 border border-slate-200 rounded-lg">
+              {matchingMembers.length === 0 ? (
+                <p className="p-3 text-center text-xs text-slate-400">No members match your search.</p>
+              ) : matchingMembers.map((member) => (
+                <button
+                  type="button"
+                  key={member._id}
+                  onClick={() => {
+                    setSelectedMemberId(member._id);
+                    setMemberSearch('');
+                  }}
+                  className="w-full px-3 py-2 text-left text-xs hover:bg-indigo-50"
+                >
+                  {member.memberId} — {member.fullName} ({member.villageId?.name || 'Village'})
+                </button>
+              ))}
+            </div>
+          )}
+          {selectedMemberObj && (
+            <p className="mt-2 text-xs font-semibold text-indigo-700">
+              Selected: {selectedMemberObj.memberId} — {selectedMemberObj.fullName}
+            </p>
+          )}
         </div>
 
         {selectedMemberObj && (

@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import api from '../api/axiosClient';
+import { fetchAllMembers } from '../utils/memberApi';
 import {
   BookOpen,
   Search,
@@ -22,13 +23,7 @@ export default function MemberLedger() {
   const [loading, setLoading] = useState(false);
 
   useEffect(() => {
-    api.get('/members?limit=150').then((res) => {
-      const list = res.data.members || [];
-      setMembers(list);
-      if (list.length > 0) {
-        setSelectedMemberId(list[0]._id);
-      }
-    });
+    fetchAllMembers().then(setMembers);
   }, []);
 
   const fetchLedger = async (id) => {
@@ -55,7 +50,8 @@ export default function MemberLedger() {
   };
 
   const filteredMembers = members.filter((m) => {
-    const q = searchMember.toLowerCase();
+    const q = searchMember.trim().toLowerCase();
+    if (q.length < 3) return false;
     return m.fullName.toLowerCase().includes(q) || m.memberId.toLowerCase().includes(q);
   });
 
@@ -90,17 +86,42 @@ export default function MemberLedger() {
           <label className="block text-[11px] font-bold uppercase tracking-wider text-slate-500 mb-1">
             Select Member for Ledger Inspection
           </label>
-          <select
-            value={selectedMemberId}
-            onChange={(e) => setSelectedMemberId(e.target.value)}
-            className="w-full px-3 py-2 text-xs rounded-lg border border-slate-300 bg-white font-bold text-slate-800"
-          >
-            {members.map((m) => (
-              <option key={m._id} value={m._id}>
-                {m.memberId} — {m.fullName} ({m.villageId?.name || 'Village'})
-              </option>
-            ))}
-          </select>
+          <div className="relative">
+            <Search className="h-4 w-4 absolute left-3 top-2.5 text-slate-400" />
+            <input
+              type="search"
+              value={searchMember}
+              onChange={(e) => setSearchMember(e.target.value)}
+              placeholder="Type at least 3 characters to search members..."
+              className="w-full pl-9 pr-3 py-2 text-xs rounded-lg border border-slate-300"
+            />
+          </div>
+          {searchMember.trim().length >= 3 && (
+            <div className="mt-2 max-h-48 overflow-y-auto divide-y divide-slate-100 border border-slate-200 rounded-lg">
+              {filteredMembers.length === 0 ? (
+                <p className="p-3 text-center text-xs text-slate-400">No members match your search.</p>
+              ) : filteredMembers.map((member) => (
+                <button
+                  type="button"
+                  key={member._id}
+                  onClick={() => {
+                    setSelectedMemberId(member._id);
+                    setSearchMember('');
+                  }}
+                  className={`w-full px-3 py-2 text-left text-xs hover:bg-indigo-50 ${
+                    selectedMemberId === member._id ? 'bg-indigo-50 font-bold' : ''
+                  }`}
+                >
+                  {member.memberId} — {member.fullName} ({member.villageId?.name || 'Village'})
+                </button>
+              ))}
+            </div>
+          )}
+          {ledgerData?.member && (
+            <p className="mt-2 text-xs font-semibold text-indigo-700">
+              Selected: {ledgerData.member.memberId} — {ledgerData.member.fullName}
+            </p>
+          )}
         </div>
 
         {ledgerData?.member && (

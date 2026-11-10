@@ -64,6 +64,7 @@ export default function Reports() {
   }, [activeReportId, villageFilter]);
 
   const [exporting, setExporting] = useState(false);
+  const [exportingCA, setExportingCA] = useState(false);
 
   const handleExportExcel = async () => {
     setExporting(true);
@@ -98,6 +99,30 @@ export default function Reports() {
     }
   };
 
+  const handleExportCAPayments = async () => {
+    setExportingCA(true);
+    try {
+      const res = await api.get('/reports/ca-payment-export/export-excel', {
+        responseType: 'blob'
+      });
+      const blob = new Blob([res.data], {
+        type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+      });
+      const url = window.URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = `DS24G_CA_Cheque_Online_${new Date().toISOString().split('T')[0]}.xlsx`;
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      window.URL.revokeObjectURL(url);
+    } catch (err) {
+      console.error('CA payment export failed:', err);
+    } finally {
+      setExportingCA(false);
+    }
+  };
+
   const handlePrint = () => {
     window.print();
   };
@@ -129,6 +154,23 @@ export default function Reports() {
         </div>
 
         <div className="flex items-center gap-2">
+          <button
+            onClick={handleExportCAPayments}
+            disabled={exportingCA}
+            className="inline-flex items-center gap-1.5 px-3.5 py-2 bg-blue-700 text-white rounded-lg text-xs font-bold hover:bg-blue-800 shadow-sm transition disabled:opacity-50 cursor-pointer"
+          >
+            {exportingCA ? (
+              <>
+                <div className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                <span>Preparing CA Excel...</span>
+              </>
+            ) : (
+              <>
+                <Download className="h-4 w-4" />
+                <span>CA Excel (Cheque + Online)</span>
+              </>
+            )}
+          </button>
           <button
             onClick={handleExportExcel}
             disabled={exporting}
