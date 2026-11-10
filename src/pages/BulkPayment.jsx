@@ -443,7 +443,7 @@ export default function BulkPayment() {
         </div>
 
         {/* Mode Selector */}
-        <div className="grid grid-cols-1 sm:grid-cols-4 gap-4 text-xs pt-1">
+        <div className="grid grid-cols-1 gap-4 pt-1 text-xs sm:grid-cols-2 lg:grid-cols-5">
           <div>
             <label className="block font-bold text-slate-700 mb-1">Payment Mode</label>
             <div className="grid grid-cols-2 gap-2">
