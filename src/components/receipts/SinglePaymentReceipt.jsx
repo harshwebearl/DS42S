@@ -48,7 +48,10 @@ export default function SinglePaymentReceipt({ receipt, onClose }) {
     );
     addLine('Payment Mode', receipt.paymentMode);
     if (receipt.chequeDetails?.chequeNumber) {
-      addLine('Cheque No & Bank', `#${receipt.chequeDetails.chequeNumber} (${receipt.chequeDetails.bankName || '-'})`);
+      addLine(
+        'Cheque Details',
+        `#${receipt.chequeDetails.chequeNumber}, ${receipt.chequeDetails.bankName || '-'}, IFSC ${receipt.chequeDetails.ifscCode || '-'}, Date ${receipt.chequeDetails.chequeDate ? new Date(receipt.chequeDetails.chequeDate).toLocaleDateString() : '-'}`
+      );
     }
     if (receipt.referenceNumber) addLine('Ref / UTR Number', receipt.referenceNumber);
     const amountRupees = receipt.totalAmountPaise != null
@@ -78,7 +81,6 @@ export default function SinglePaymentReceipt({ receipt, onClose }) {
           <h2 className="text-xl font-black text-slate-900 mt-1">
             SHREE DASHASHREMALI 42 GNATI SURAKSHA SAMITI
           </h2>
-          <p className="text-xs text-slate-500">Central Office: Mahuva / Bhavnagar, Gujarat</p>
         </div>
 
         {/* Receipt Meta */}
@@ -129,9 +131,9 @@ export default function SinglePaymentReceipt({ receipt, onClose }) {
           </div>
           {receipt.chequeDetails?.chequeNumber && (
             <div className="flex justify-between py-1">
-              <span className="text-slate-600">Cheque No & Bank:</span>
+              <span className="text-slate-600">Cheque Details:</span>
               <span className="font-medium text-slate-900">
-                #{receipt.chequeDetails.chequeNumber} ({receipt.chequeDetails.bankName})
+                #{receipt.chequeDetails.chequeNumber} ({receipt.chequeDetails.bankName}) · IFSC {receipt.chequeDetails.ifscCode || '-'} · {receipt.chequeDetails.chequeDate ? new Date(receipt.chequeDetails.chequeDate).toLocaleDateString() : '-'}
               </span>
             </div>
           )}

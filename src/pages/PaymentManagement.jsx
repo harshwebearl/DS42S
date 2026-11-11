@@ -12,7 +12,6 @@ const blankChequeDetails = {
   chequeNumber: '',
   bankName: '',
   ifscCode: '',
-  bankAccountNumber: '',
   chequeDate: ''
 };
 
@@ -189,13 +188,18 @@ export default function PaymentManagement() {
     setError('');
     setSaving(true);
     try {
-      await api.put(`/payments/${form._id}`, {
+      const response = await api.put(`/payments/${form._id}`, {
         payerName: form.payerName,
         payerMobile: form.payerMobile,
         paymentDate: form.paymentDate,
         paymentMode: form.paymentMode,
         totalAmountRupees: Number(form.totalAmountRupees),
-        chequeDetails: form.paymentMode === 'CHEQUE' ? form.chequeDetails : undefined,
+        chequeDetails: form.paymentMode === 'CHEQUE' ? {
+          chequeNumber: form.chequeDetails.chequeNumber,
+          bankName: form.chequeDetails.bankName,
+          ifscCode: form.chequeDetails.ifscCode,
+          chequeDate: form.chequeDetails.chequeDate
+        } : undefined,
         referenceNumber: form.referenceNumber,
         remarks: form.remarks,
         allocations: form.allocations.map((allocation) => ({
@@ -207,9 +211,31 @@ export default function PaymentManagement() {
           notes: allocation.notes
         }))
       });
+      const updatedTransaction = response.data.transaction;
+      const formattedTotalAmount = new Intl.NumberFormat('en-IN', {
+        style: 'currency',
+        currency: 'INR'
+      }).format(updatedTransaction.totalAmountPaise / 100);
+      const updatedMember = !form.isBulk
+        ? members.find((member) => member._id === form.allocations[0]?.memberId)
+        : null;
+      setTransactions((current) => current.map((transaction) => (
+        transaction._id === form._id
+          ? {
+              ...transaction,
+              ...updatedTransaction,
+              formattedTotalAmount,
+              singleMemberId: updatedMember || transaction.singleMemberId,
+              memberIds: form.isBulk
+                ? form.allocations.map((allocation) => (
+                    members.find((member) => member._id === allocation.memberId)?.memberId || allocation.memberId
+                  ))
+                : transaction.memberIds
+            }
+          : transaction
+      )));
       setEditing(false);
       setForm(null);
-      await fetchTransactions();
     } catch (requestError) {
       setError(requestError.response?.data?.message || 'Payment update failed.');
     } finally {
@@ -279,7 +305,9 @@ export default function PaymentManagement() {
                   <td className="px-3 py-2.5">
                     <p className="font-semibold">{transaction.payerName}</p>
                     <p className="text-[10px] text-slate-400">
-                      {transaction.isBulk ? 'Group payment' : transaction.singleMemberId?.fullName || 'Single member'}
+                      {transaction.isBulk
+                        ? `Group payment · ${transaction.memberIds?.join(', ') || 'No member IDs'}`
+                        : `${transaction.singleMemberId?.memberId || '-'} · ${transaction.singleMemberId?.fullName || 'Single member'}`}
                     </p>
                   </td>
                   <td className="px-3 py-2.5">{new Date(transaction.paymentDate).toLocaleDateString()}</td>
@@ -357,7 +385,8 @@ export default function PaymentManagement() {
               <label className="font-bold text-slate-700">Total Amount (₹)
                 <input type="number" min="0.01" step="0.01" required value={form.totalAmountRupees} onChange={(event) => setForm({ ...form, totalAmountRupees: event.target.value })} className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 font-mono font-bold" />
               </label>
-              <label className="font-bold text-slate-700">Reference / UTR
+              <label className="font-bold text-slate-700">
+                {form.paymentMode === 'UPI' ? 'UPI Reference Number' : 'Reference / UTR'}
                 <input value={form.referenceNumber} onChange={(event) => setForm({ ...form, referenceNumber: event.target.value })} className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 font-normal" />
               </label>
             </div>
@@ -372,8 +401,7 @@ export default function PaymentManagement() {
                 />
                 {[
                   ['chequeNumber', 'Cheque Number'],
-                  ['bankName', 'Bank Name & Branch'],
-                  ['bankAccountNumber', 'Bank Account Number']
+                  ['bankName', 'Bank Name & Branch']
                 ].map(([key, label]) => (
                   <label key={key} className="font-bold text-slate-700">{label}
                     <input required value={form.chequeDetails[key] || ''} onChange={(event) => setForm({

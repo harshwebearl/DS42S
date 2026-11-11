@@ -30,11 +30,15 @@ export default function BulkPaymentReceipt({ receipt, onClose }) {
     doc.text(`Payment Date: ${receipt.paymentDate ? new Date(receipt.paymentDate).toLocaleDateString() : '-'}`, 16, 59);
     doc.text(`Payer: ${receipt.payerName || '-'}`, 16, 67);
     doc.text(`Payment Mode: ${receipt.paymentMode || '-'}`, 16, 75);
-    doc.text(`Member: ${memberName} (${memberId})`, 16, 89);
-    doc.text(`Village: ${allocation.member?.village || allocation.village || '-'}`, 16, 97);
+    if (receipt.referenceNumber) doc.text(`Reference / UTR: ${receipt.referenceNumber}`, 16, 81);
+    if (receipt.chequeDetails?.chequeNumber) {
+      doc.text(`Cheque: #${receipt.chequeDetails.chequeNumber} — ${receipt.chequeDetails.bankName || '-'} — IFSC ${receipt.chequeDetails.ifscCode || '-'}`, 16, 87);
+    }
+    doc.text(`Member: ${memberName} (${memberId})`, 16, 95);
+    doc.text(`Village: ${allocation.member?.village || allocation.village || '-'}`, 16, 103);
     const installmentLines = doc.splitTextToSize(`Installment paid to: ${installmentNames}`, 178);
-    doc.text(installmentLines, 16, 105);
-    const amountY = 110 + installmentLines.length * 5;
+    doc.text(installmentLines, 16, 111);
+    const amountY = 116 + installmentLines.length * 5;
     doc.setFont('helvetica', 'bold');
     doc.setFontSize(13);
     const amountRupees = allocation.amountRupees ?? allocation.allocatedAmountRupees ?? (allocation.allocatedAmountPaise / 100);
@@ -76,12 +80,13 @@ export default function BulkPaymentReceipt({ receipt, onClose }) {
     addLine('Payer Name', receipt.payerName);
     addLine('Payer Mobile', receipt.payerMobile);
     addLine('Payment Mode', receipt.paymentMode);
+    if (receipt.referenceNumber) addLine('Reference / UTR', receipt.referenceNumber);
     const totalAmountRupees = receipt.totalAmountRupees ?? (Number(receipt.totalAmountPaise || 0) / 100);
     addLine('Total Received Amount', `Rs. ${Number(totalAmountRupees).toFixed(2)}`);
     if (receipt.chequeDetails?.chequeNumber) {
       addLine(
         'Cheque Particulars',
-        `#${receipt.chequeDetails.chequeNumber} — ${receipt.chequeDetails.bankName || '-'}`
+        `#${receipt.chequeDetails.chequeNumber} — ${receipt.chequeDetails.bankName || '-'} — IFSC ${receipt.chequeDetails.ifscCode || '-'} — ${receipt.chequeDetails.chequeDate ? new Date(receipt.chequeDetails.chequeDate).toLocaleDateString() : '-'}`
       );
     }
     addLine('Payment Status', receipt.paymentStatus);
@@ -126,7 +131,6 @@ export default function BulkPaymentReceipt({ receipt, onClose }) {
           <h2 className="text-xl font-black text-slate-900 mt-1">
             SHREE DASHASHREMALI 42 GNATI SURAKSHA SAMITI
           </h2>
-          <p className="text-xs text-slate-500">Central Office: Mahuva / Bhavnagar, Gujarat</p>
         </div>
 
         {/* Master Transaction Information */}
@@ -156,14 +160,20 @@ export default function BulkPaymentReceipt({ receipt, onClose }) {
             <p className="font-bold text-slate-900 uppercase">{receipt.paymentMode}</p>
           </div>
           <div>
-            <span className="text-slate-500">Total Received Cheque Amount:</span>
+            <span className="text-slate-500">Total Received Amount:</span>
             <p className="font-black text-indigo-700 text-sm">{receipt.formattedTotalAmount || `₹${receipt.totalAmountRupees}`}</p>
           </div>
+          {receipt.referenceNumber && (
+            <div className="col-span-2">
+              <span className="text-slate-500">Reference / UTR:</span>
+              <p className="font-medium text-slate-900">{receipt.referenceNumber}</p>
+            </div>
+          )}
           {receipt.chequeDetails?.chequeNumber && (
             <div className="col-span-2 pt-1 border-t border-slate-200">
               <span className="text-slate-500">Cheque Particulars:</span>
               <p className="font-medium text-slate-900">
-                Cheque #{receipt.chequeDetails.chequeNumber} — {receipt.chequeDetails.bankName} (Dated: {receipt.chequeDetails.chequeDate ? new Date(receipt.chequeDetails.chequeDate).toLocaleDateString() : '-'})
+                Cheque #{receipt.chequeDetails.chequeNumber} — {receipt.chequeDetails.bankName} — IFSC {receipt.chequeDetails.ifscCode || '-'} (Dated: {receipt.chequeDetails.chequeDate ? new Date(receipt.chequeDetails.chequeDate).toLocaleDateString() : '-'})
               </p>
             </div>
           )}

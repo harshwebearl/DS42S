@@ -29,7 +29,6 @@ export default function SinglePayment() {
     chequeNumber: '',
     bankName: '',
     ifscCode: '',
-    bankAccountNumber: '',
     chequeDate: new Date().toISOString().split('T')[0]
   });
   const [remarks, setRemarks] = useState('');
@@ -158,11 +157,6 @@ export default function SinglePayment() {
       setErrorMsg('Payment amount must be greater than zero.');
       return;
     }
-    if (paymentMode === 'CHEQUE' && !chequeDetails.bankAccountNumber.trim()) {
-      setErrorMsg('Bank Account Number is required for cheque payments.');
-      return;
-    }
-
     setErrorMsg('');
     setSubmitting(true);
 
@@ -679,18 +673,6 @@ export default function SinglePayment() {
                   />
                 </div>
                 <div>
-                  <label className="block font-bold text-slate-700 mb-1">
-                    Bank Account Number <span className="text-rose-500">*</span>
-                  </label>
-                  <input
-                    type="text"
-                    required
-                    value={chequeDetails.bankAccountNumber}
-                    onChange={(e) => setChequeDetails({ ...chequeDetails, bankAccountNumber: e.target.value })}
-                    className="w-full px-3 py-2 rounded-lg border border-slate-300 bg-white font-mono"
-                  />
-                </div>
-                <div>
                   <label className="block font-bold text-slate-700 mb-1">Cheque Date</label>
                   <input
                     type="date"
@@ -702,7 +684,9 @@ export default function SinglePayment() {
               </div>
             ) : (
               <div>
-                <label className="block font-bold text-slate-700 mb-1">Transaction Ref / UTR / Remarks</label>
+                <label className="block font-bold text-slate-700 mb-1">
+                  {paymentMode === 'UPI' ? 'UPI Reference Number' : 'Transaction Ref / UTR'}
+                </label>
                 <input
                   type="text"
                   value={referenceNumber}

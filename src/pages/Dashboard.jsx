@@ -121,14 +121,14 @@ export default function Dashboard() {
         {/* Card 2: Installment Demand & Collection */}
         <div className="bg-white rounded-xl p-5 border border-slate-200/80 shadow-2xs hover:shadow-md transition">
           <div className="flex items-center justify-between">
-            <span className="text-xs font-bold uppercase tracking-wider text-slate-500">Total Collection</span>
+            <span className="text-xs font-bold uppercase tracking-wider text-slate-500">Active Member Demand</span>
             <div className="p-2 bg-emerald-50 text-emerald-600 rounded-lg">
               <TrendingUp className="h-5 w-5" />
             </div>
           </div>
-          <p className="text-2xl font-black text-slate-900 mt-2">{installmentStats?.formattedCollected || '₹0.00'}</p>
+          <p className="text-2xl font-black text-slate-900 mt-2">{installmentStats?.formattedDemand || '₹0.00'}</p>
           <div className="flex items-center justify-between mt-3 text-[11px] text-slate-500">
-            <span>Demand: <strong className="text-slate-800">{installmentStats?.formattedDemand}</strong></span>
+            <span>Received: <strong className="text-emerald-700">{installmentStats?.formattedCollected}</strong></span>
             <span>Pending: <strong className="text-rose-600">{installmentStats?.formattedOutstanding}</strong></span>
           </div>
         </div>

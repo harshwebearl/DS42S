@@ -39,16 +39,15 @@ export default function BulkPayment() {
     chequeNumber: '',
     bankName: '',
     ifscCode: '',
-    bankAccountNumber: '',
     chequeDate: new Date().toISOString().split('T')[0]
   });
   const [referenceNumber, setReferenceNumber] = useState('');
   const [remarks, setRemarks] = useState('');
 
   // Selected Members Allocations Grid
-  // Array of { memberId, memberObj, dues, selectedDueId, amountRupees, notes }
+  // Array of { memberId, memberObj, dues, selectedDueIds, waivedDueIds, amountRupees, notes }
   const [allocatedRows, setAllocatedRows] = useState([]);
-  const [bulkInstallmentToApply, setBulkInstallmentToApply] = useState('');
+  const [bulkInstallmentsToApply, setBulkInstallmentsToApply] = useState([]);
 
   // Modals & Feedback
   const [receipt, setReceipt] = useState(null);
@@ -85,6 +84,16 @@ export default function BulkPayment() {
   });
   const canSearchMembers = memberSearchQuery.trim().length >= 3;
 
+  const getSelectedDueTotal = (row, selectedDueIds = row.selectedDueIds, waivedDueIds = row.waivedDueIds) =>
+    row.dues
+      .filter((due) => selectedDueIds.includes(due._id))
+      .reduce((total, due) => {
+        const penalty = due.isThreeMonthsOverdue && !waivedDueIds.includes(due._id)
+          ? (due.penaltyAmountRupees || 0)
+          : 0;
+        return total + (due.outstandingRupees || 0) + penalty;
+      }, 0);
+
   // Add Member to allocation grid with installment selection
   const handleAddMember = async (member) => {
     let duesInfo = [];
@@ -96,19 +105,18 @@ export default function BulkPayment() {
     }
 
     const firstDue = duesInfo.length > 0 ? duesInfo[0] : null;
-    const initialAmount = firstDue
-      ? (firstDue.isThreeMonthsOverdue ? firstDue.totalWithPenaltyRupees : firstDue.outstandingRupees)
-      : (duesInfo.length === 0 ? 0 : 1000);
     const pendingTotal = duesInfo.reduce((acc, d) => acc + (d.outstandingRupees || 0), 0);
+    const selectedDueIds = firstDue ? [firstDue._id] : [];
+    const waivedDueIds = [];
 
     const newRow = {
       memberId: member._id,
       memberObj: member,
       dues: duesInfo,
-      selectedDueId: firstDue ? firstDue._id : '',
+      selectedDueIds,
+      waivedDueIds,
       pendingTotal,
-      waivePenalty: false,
-      amountRupees: initialAmount > 0 ? initialAmount : '',
+      amountRupees: getSelectedDueTotal({ dues: duesInfo, selectedDueIds, waivedDueIds }) || '',
       notes: ''
     };
 
@@ -116,23 +124,19 @@ export default function BulkPayment() {
   };
 
   // Change installment selection for an individual row
-  const handleRowDueChange = (memberId, dueId) => {
+  const handleRowDueToggle = (memberId, dueId) => {
     setAllocatedRows(
       allocatedRows.map((r) => {
         if (r.memberId === memberId) {
-          const matchedDue = r.dues.find((d) => d._id === dueId);
-          let newAmt = r.amountRupees;
-          if (matchedDue) {
-            if (matchedDue.isThreeMonthsOverdue) {
-              newAmt = r.waivePenalty ? matchedDue.outstandingRupees : matchedDue.totalWithPenaltyRupees;
-            } else {
-              newAmt = matchedDue.outstandingRupees;
-            }
-          }
+          const selectedDueIds = r.selectedDueIds.includes(dueId)
+            ? r.selectedDueIds.filter((id) => id !== dueId)
+            : [...r.selectedDueIds, dueId];
+          const waivedDueIds = r.waivedDueIds.filter((id) => selectedDueIds.includes(id));
           return {
             ...r,
-            selectedDueId: dueId,
-            amountRupees: newAmt
+            selectedDueIds,
+            waivedDueIds,
+            amountRupees: getSelectedDueTotal(r, selectedDueIds, waivedDueIds) || ''
           };
         }
         return r;
@@ -141,20 +145,17 @@ export default function BulkPayment() {
   };
 
   // Toggle waive penalty for a specific member row
-  const handleToggleRowPenaltyWaive = (memberId) => {
+  const handleToggleRowPenaltyWaive = (memberId, dueId) => {
     setAllocatedRows(
       allocatedRows.map((r) => {
         if (r.memberId === memberId) {
-          const nextWaive = !r.waivePenalty;
-          const matchedDue = r.dues.find((d) => d._id === r.selectedDueId);
-          let newAmt = r.amountRupees;
-          if (matchedDue && matchedDue.isThreeMonthsOverdue) {
-            newAmt = nextWaive ? matchedDue.outstandingRupees : matchedDue.totalWithPenaltyRupees;
-          }
+          const waivedDueIds = r.waivedDueIds.includes(dueId)
+            ? r.waivedDueIds.filter((id) => id !== dueId)
+            : [...r.waivedDueIds, dueId];
           return {
             ...r,
-            waivePenalty: nextWaive,
-            amountRupees: newAmt
+            waivedDueIds,
+            amountRupees: getSelectedDueTotal(r, r.selectedDueIds, waivedDueIds) || ''
           };
         }
         return r;
@@ -165,53 +166,50 @@ export default function BulkPayment() {
   // Toggle waive penalty for all rows with overdue penalties
   const handleToggleWaiveAllPenalties = () => {
     const anyOverdueNotWaived = allocatedRows.some((r) => {
-      const due = r.dues.find((d) => d._id === r.selectedDueId);
-      return due && due.isThreeMonthsOverdue && !r.waivePenalty;
+      return r.dues.some((due) =>
+        r.selectedDueIds.includes(due._id) &&
+        due.isThreeMonthsOverdue &&
+        !r.waivedDueIds.includes(due._id)
+      );
     });
 
     const targetWaive = anyOverdueNotWaived;
 
     setAllocatedRows(
       allocatedRows.map((r) => {
-        const matchedDue = r.dues.find((d) => d._id === r.selectedDueId);
-        if (matchedDue && matchedDue.isThreeMonthsOverdue) {
-          return {
-            ...r,
-            waivePenalty: targetWaive,
-            amountRupees: targetWaive ? matchedDue.outstandingRupees : matchedDue.totalWithPenaltyRupees
-          };
-        }
-        return r;
+        const selectedOverdueIds = r.dues
+          .filter((due) => r.selectedDueIds.includes(due._id) && due.isThreeMonthsOverdue)
+          .map((due) => due._id);
+        const waivedDueIds = targetWaive
+          ? [...new Set([...r.waivedDueIds, ...selectedOverdueIds])]
+          : r.waivedDueIds.filter((id) => !selectedOverdueIds.includes(id));
+        return {
+          ...r,
+          waivedDueIds,
+          amountRupees: getSelectedDueTotal(r, r.selectedDueIds, waivedDueIds) || ''
+        };
       })
     );
   };
 
-  // Apply a specific installment to all added members in one click
+  // Apply selected installments to all added members in one click
   const handleApplyInstallmentToAll = () => {
-    if (!bulkInstallmentToApply) {
-      alert('Please choose an installment from the dropdown first.');
+    if (bulkInstallmentsToApply.length === 0) {
+      alert('Please choose at least one installment first.');
       return;
     }
 
     const updated = allocatedRows.map((r) => {
-      // Find if this member has a pending due for this installment
-      const matchingDue = r.dues.find(
-        (d) => d.installmentId?._id === bulkInstallmentToApply || d.installmentId === bulkInstallmentToApply
-      );
-
-      if (matchingDue) {
-        let newAmt = matchingDue.outstandingRupees;
-        if (matchingDue.isThreeMonthsOverdue) {
-          newAmt = r.waivePenalty ? matchingDue.outstandingRupees : matchingDue.totalWithPenaltyRupees;
-        }
-
-        return {
-          ...r,
-          selectedDueId: matchingDue._id,
-          amountRupees: newAmt
-        };
-      }
-      return r;
+      const selectedDueIds = r.dues
+        .filter((due) => bulkInstallmentsToApply.includes(String(due.installmentId?._id || due.installmentId)))
+        .map((due) => due._id);
+      const waivedDueIds = r.waivedDueIds.filter((id) => selectedDueIds.includes(id));
+      return {
+        ...r,
+        selectedDueIds,
+        waivedDueIds,
+        amountRupees: getSelectedDueTotal(r, selectedDueIds, waivedDueIds) || ''
+      };
     });
 
     setAllocatedRows(updated);
@@ -245,7 +243,7 @@ export default function BulkPayment() {
 
     const total = parseFloat(totalAmountRupees);
     if (isNaN(total) || total <= 0) {
-      alert('Please enter a valid Total Cheque Amount greater than zero.');
+      alert('Please enter a valid Total Payment Amount greater than zero.');
       return;
     }
 
@@ -270,25 +268,28 @@ export default function BulkPayment() {
   const totalReceived = parseFloat(totalAmountRupees) || 0;
   const sumAllocated = allocatedRows.reduce((acc, r) => acc + (parseFloat(r.amountRupees) || 0), 0);
   const totalPenaltiesIncluded = allocatedRows.reduce((acc, r) => {
-    if (r.waivePenalty) return acc;
-    const due = r.dues.find((d) => d._id === r.selectedDueId);
-    return acc + (due && due.isThreeMonthsOverdue ? (due.penaltyAmountRupees || 0) : 0);
+    return acc + r.dues.reduce((rowTotal, due) =>
+      r.selectedDueIds.includes(due._id) &&
+      due.isThreeMonthsOverdue &&
+      !r.waivedDueIds.includes(due._id)
+        ? rowTotal + (due.penaltyAmountRupees || 0)
+        : rowTotal, 0);
   }, 0);
   const totalPenaltiesWaived = allocatedRows.reduce((acc, r) => {
-    if (!r.waivePenalty) return acc;
-    const due = r.dues.find((d) => d._id === r.selectedDueId);
-    return acc + (due && due.isThreeMonthsOverdue ? (due.penaltyAmountRupees || 0) : 0);
+    return acc + r.dues.reduce((rowTotal, due) =>
+      r.selectedDueIds.includes(due._id) &&
+      due.isThreeMonthsOverdue &&
+      r.waivedDueIds.includes(due._id)
+        ? rowTotal + (due.penaltyAmountRupees || 0)
+        : rowTotal, 0);
   }, 0);
   const hasAnyOverdueRows = allocatedRows.some((r) => {
-    const due = r.dues.find((d) => d._id === r.selectedDueId);
-    return due && due.isThreeMonthsOverdue;
+    return r.dues.some((due) => r.selectedDueIds.includes(due._id) && due.isThreeMonthsOverdue);
   });
   const allOverdueWaived = hasAnyOverdueRows && allocatedRows
-    .filter((r) => {
-      const due = r.dues.find((d) => d._id === r.selectedDueId);
-      return due && due.isThreeMonthsOverdue;
-    })
-    .every((r) => r.waivePenalty);
+    .every((r) => r.dues
+      .filter((due) => r.selectedDueIds.includes(due._id) && due.isThreeMonthsOverdue)
+      .every((due) => r.waivedDueIds.includes(due._id)));
 
   const totalBaseInstallmentAmount = sumAllocated - totalPenaltiesIncluded;
   const remainingUnallocated = Math.round((totalReceived - sumAllocated) * 100) / 100;
@@ -306,7 +307,7 @@ export default function BulkPayment() {
 
     if (!isExactMatch) {
       setErrorMsg(
-        `Strict Allocation Mismatch: Total Cheque Amount (₹${totalReceived.toFixed(2)}) must exactly equal Sum of Member Allocations (₹${sumAllocated.toFixed(2)}). Difference is ₹${remainingUnallocated.toFixed(2)}.`
+        `Strict Allocation Mismatch: Total Payment Amount (₹${totalReceived.toFixed(2)}) must exactly equal Sum of Member Allocations (₹${sumAllocated.toFixed(2)}). Difference is ₹${remainingUnallocated.toFixed(2)}.`
       );
       return;
     }
@@ -324,13 +325,12 @@ export default function BulkPayment() {
       ? {
           ...chequeDetails,
           chequeNumber: chequeDetails.chequeNumber.trim(),
-          bankName: chequeDetails.bankName.trim(),
-          bankAccountNumber: chequeDetails.bankAccountNumber.trim()
+          bankName: chequeDetails.bankName.trim()
         }
       : undefined;
 
-    if (paymentMode === 'CHEQUE' && (!normalizedChequeDetails.chequeNumber || !normalizedChequeDetails.bankName || !normalizedChequeDetails.bankAccountNumber)) {
-      setErrorMsg('Cheque Number, Bank Name, and Bank Account Number are required for cheque payments.');
+    if (paymentMode === 'CHEQUE' && (!normalizedChequeDetails.chequeNumber || !normalizedChequeDetails.bankName)) {
+      setErrorMsg('Cheque Number and Bank Name are required for cheque payments.');
       return;
     }
 
@@ -348,9 +348,9 @@ export default function BulkPayment() {
         allocations: allocatedRows.map((r) => ({
           memberId: r.memberId,
           amountRupees: parseFloat(r.amountRupees),
-          selectedDueIds: r.selectedDueId ? [r.selectedDueId] : [],
-          waivePenalty: Boolean(r.waivePenalty),
-          waivedDueIds: r.waivePenalty && r.selectedDueId ? [r.selectedDueId] : [],
+          selectedDueIds: r.selectedDueIds,
+          waivePenalty: false,
+          waivedDueIds: r.waivedDueIds,
           notes: r.notes || `Bulk allocation for ${r.memberObj.fullName}`
         }))
       };
@@ -508,22 +508,6 @@ export default function BulkPayment() {
                 />
               </div>
               <div>
-                <label className="block font-bold text-slate-700 mb-1">
-                  Bank Account Number <span className="text-rose-500">*</span>
-                </label>
-                <input
-                  type="text"
-                  required
-                  id="bulk-cheque-bank-account-number"
-                  name="bankAccountNumber"
-                  autoComplete="off"
-                  value={chequeDetails.bankAccountNumber}
-                  onChange={(e) => setChequeDetails({ ...chequeDetails, bankAccountNumber: e.target.value })}
-                  placeholder="Enter bank account number"
-                  className="w-full px-3 py-2 rounded-lg border border-slate-300 bg-amber-50/50 font-mono"
-                />
-              </div>
-              <div>
                 <label className="block font-bold text-slate-700 mb-1">Cheque Date</label>
                 <input
                   type="date"
@@ -535,7 +519,9 @@ export default function BulkPayment() {
             </div>
           ) : (
             <div className="max-w-xl">
-              <label className="block font-bold text-slate-700 mb-1">Bank UTR / Transaction Reference</label>
+              <label className="block font-bold text-slate-700 mb-1">
+                {paymentMode === 'UPI' ? 'UPI Reference Number' : 'Bank UTR / Transaction Reference'}
+              </label>
               <input
                 type="text"
                 value={referenceNumber}
@@ -620,7 +606,7 @@ export default function BulkPayment() {
                 3. Member Allocations Grid ({allocatedRows.length} Members Selected)
               </h3>
               <p className="text-[11px] text-slate-400">
-                Choose installment per member or set all to the same installment.
+                Select one or more installments per member, or apply a selection to all members.
               </p>
             </div>
 
@@ -628,28 +614,33 @@ export default function BulkPayment() {
             <div className="flex flex-wrap items-center gap-2">
               {/* Apply Installment to All Selector */}
               {activeInstallments.length > 0 && allocatedRows.length > 0 && (
-                <div className="flex items-center gap-1 text-xs">
-                  <select
-                    value={bulkInstallmentToApply}
-                    onChange={(e) => setBulkInstallmentToApply(e.target.value)}
-                    className="px-2 py-1 text-xs rounded-lg border border-slate-300 bg-white"
-                  >
-                    <option value="">Choose Installment...</option>
+                <div className="flex items-center gap-2 text-xs">
+                  <div className="flex max-h-24 max-w-[360px] flex-wrap gap-2 overflow-y-auto rounded-lg border border-slate-300 bg-white p-2">
                     {activeInstallments.map((inst) => {
                       const yr = inst.financialYearId?.yearName;
                       return (
-                        <option key={inst._id} value={inst._id}>
-                          {inst.installmentTitle} {yr ? `(${yr})` : ''} (₹{inst.amountRupees || inst.installmentAmountRupees})
-                        </option>
+                        <label key={inst._id} className="inline-flex items-center gap-1">
+                          <input
+                            type="checkbox"
+                            checked={bulkInstallmentsToApply.includes(inst._id)}
+                            onChange={() => setBulkInstallmentsToApply((current) => (
+                              current.includes(inst._id)
+                                ? current.filter((id) => id !== inst._id)
+                                : [...current, inst._id]
+                            ))}
+                            className="h-3.5 w-3.5 rounded border-slate-300 text-indigo-600"
+                          />
+                          <span>{inst.installmentTitle} {yr ? `(${yr})` : ''}</span>
+                        </label>
                       );
                     })}
-                  </select>
+                  </div>
                   <button
                     type="button"
                     onClick={handleApplyInstallmentToAll}
                     className="px-2.5 py-1 rounded-lg bg-slate-100 text-slate-700 border border-slate-300 font-bold text-xs hover:bg-slate-200"
                   >
-                    Set All
+                    Apply to All
                   </button>
                 </div>
               )}
@@ -714,80 +705,44 @@ export default function BulkPayment() {
                       </td>
                       <td className="py-2.5 px-3 text-slate-600 font-medium">{row.memberObj.villageId?.name || '-'}</td>
                       
-                      {/* Installment Selection Dropdown for each member */}
+                      {/* Multi-select installment list for each member */}
                       <td className="py-2.5 px-3">
                         {row.dues.length === 0 ? (
                           <span className="text-slate-400 text-[11px] italic">No pending installments</span>
                         ) : (
-                          <div className="space-y-1">
-                            <select
-                              value={row.selectedDueId}
-                              onChange={(e) => handleRowDueChange(row.memberId, e.target.value)}
-                              className={`w-full px-2 py-1 text-xs rounded border font-medium focus:ring-1 focus:ring-indigo-500 ${
-                                row.dues.find(d => d._id === row.selectedDueId)?.isThreeMonthsOverdue
-                                  ? 'border-rose-300 bg-rose-50/70 text-rose-900 font-bold'
-                                  : 'border-indigo-200 bg-indigo-50/40 text-slate-800'
-                              }`}
-                            >
-                              {row.dues.map((d) => {
-                                const yr = d.financialYearId?.yearName || d.installmentId?.financialYearId?.yearName;
-                                return (
-                                  <option key={d._id} value={d._id}>
-                                    {d.installmentId?.installmentTitle || 'Installment'} {yr ? `(${yr})` : ''} — ₹{d.outstandingRupees} {d.isThreeMonthsOverdue ? `(+₹${d.penaltyAmountRupees} Overdue Penalty)` : ''}
-                                  </option>
-                                );
-                              })}
-                            </select>
-
-                            {/* Show Due Date & Overdue 3 Months status with Waive Penalty option */}
-                            {(() => {
-                              const selectedDue = row.dues.find((d) => d._id === row.selectedDueId);
-                              if (!selectedDue) return null;
-                              if (selectedDue.isThreeMonthsOverdue) {
-                                return (
-                                  <div className="space-y-1 mt-1">
-                                    <div className="text-[10px] text-rose-700 font-bold flex items-center gap-1">
-                                      <span className="h-1.5 w-1.5 rounded-full bg-rose-600 animate-pulse shrink-0" />
-                                      <span>Due: {new Date(selectedDue.dueDate).toLocaleDateString()} (&gt;3 Mo Overdue +₹{selectedDue.penaltyAmountRupees})</span>
-                                    </div>
-                                    <div className="pt-1 border-t border-slate-100 flex items-center justify-between gap-1">
-                                      <label className="inline-flex items-center gap-1.5 cursor-pointer select-none">
-                                        <input
-                                          type="checkbox"
-                                          checked={Boolean(row.waivePenalty)}
-                                          onChange={() => handleToggleRowPenaltyWaive(row.memberId)}
-                                          className="h-3.5 w-3.5 rounded text-amber-600 focus:ring-amber-500 border-slate-300 cursor-pointer"
-                                        />
-                                        <span className={`text-[11px] font-bold ${row.waivePenalty ? 'text-amber-800' : 'text-slate-600'}`}>
-                                          દંડ ના લેવો (Waive)
-                                        </span>
-                                      </label>
-                                      {row.waivePenalty ? (
-                                        <span className="text-[10px] font-semibold text-emerald-700 bg-emerald-50 border border-emerald-200 px-1 py-0.5 rounded">
-                                          ₹0 (Maaf)
-                                        </span>
-                                      ) : (
-                                        <span className="text-[10px] font-bold text-rose-700 bg-rose-50 border border-rose-200 px-1 py-0.5 rounded">
-                                          +₹{selectedDue.penaltyAmountRupees}
-                                        </span>
-                                      )}
-                                    </div>
-                                  </div>
-                                );
-                              } else if (selectedDue.isDuePassed) {
-                                return (
-                                  <div className="text-[10px] text-amber-700 font-medium">
-                                    Due Date passed: {new Date(selectedDue.dueDate).toLocaleDateString()} (Grace period)
-                                  </div>
-                                );
-                              } else {
-                                return (
-                                  <div className="text-[10px] text-slate-400">
-                                    Due Date: {new Date(selectedDue.dueDate).toLocaleDateString()}
-                                  </div>
-                                );
-                              }
-                            })()}
+                          <div className="max-h-44 space-y-1 overflow-y-auto rounded border border-slate-200 p-2">
+                            {row.dues.map((due) => {
+                              const year = due.financialYearId?.yearName || due.installmentId?.financialYearId?.yearName;
+                              const selected = row.selectedDueIds.includes(due._id);
+                              const waived = row.waivedDueIds.includes(due._id);
+                              return (
+                                <div key={due._id} className="rounded px-1 py-1 hover:bg-slate-50">
+                                  <label className="flex items-start gap-1.5 text-[11px]">
+                                    <input
+                                      type="checkbox"
+                                      checked={selected}
+                                      onChange={() => handleRowDueToggle(row.memberId, due._id)}
+                                      className="mt-0.5 h-3.5 w-3.5 rounded border-slate-300 text-indigo-600"
+                                    />
+                                    <span className="font-medium text-slate-800">
+                                      {due.installmentId?.installmentTitle || 'Installment'} {year ? `(${year})` : ''} — ₹{due.outstandingRupees}
+                                      {due.isThreeMonthsOverdue && <span className="text-rose-700"> (+₹{due.penaltyAmountRupees} penalty)</span>}
+                                    </span>
+                                  </label>
+                                  {due.isThreeMonthsOverdue && selected && (
+                                    <label className="ml-5 mt-1 flex items-center gap-1 text-[10px] font-semibold text-amber-800">
+                                      <input
+                                        type="checkbox"
+                                        checked={waived}
+                                        onChange={() => handleToggleRowPenaltyWaive(row.memberId, due._id)}
+                                        className="h-3 w-3 rounded border-slate-300 text-amber-600"
+                                      />
+                                      Waive penalty
+                                    </label>
+                                  )}
+                                </div>
+                              );
+                            })}
                           </div>
                         )}
                       </td>
@@ -867,7 +822,7 @@ export default function BulkPayment() {
           {/* REAL-TIME ALLOCATION TOTALS BAR */}
           <div className="p-4 bg-slate-900 text-white rounded-xl grid grid-cols-2 sm:grid-cols-4 gap-4 text-xs font-mono">
             <div>
-              <p className="text-[10px] text-slate-400 uppercase font-sans font-bold">Total Cheque</p>
+              <p className="text-[10px] text-slate-400 uppercase font-sans font-bold">Total Payment</p>
               <p className="text-base font-bold text-white mt-0.5">₹{totalReceived.toFixed(2)}</p>
             </div>
             <div>
@@ -938,7 +893,7 @@ export default function BulkPayment() {
                   <span>Post Master Payment & Allocate ₹{totalReceived.toFixed(2)} to {allocatedRows.length} Members</span>
                 </>
               ) : (
-                <span>⚠️ Balance Must Equal Cheque Amount (Diff: ₹{remainingUnallocated.toFixed(2)})</span>
+                <span>⚠️ Balance Must Equal Payment Amount (Diff: ₹{remainingUnallocated.toFixed(2)})</span>
               )}
             </button>
           </div>
