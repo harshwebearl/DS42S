@@ -1,10 +1,12 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { AlertCircle, CreditCard, Pencil, Search, Save, UserPlus, X } from 'lucide-react';
+import { AlertCircle, CreditCard, FileText, Pencil, Search, Save, UserPlus, X } from 'lucide-react';
 import api from '../api/axiosClient';
 import Modal from '../components/common/Modal';
 import Badge from '../components/common/Badge';
 import { fetchAllMembers } from '../utils/memberApi';
 import IfscInput from '../components/common/IfscInput';
+import SinglePaymentReceipt from '../components/receipts/SinglePaymentReceipt';
+import BulkPaymentReceipt from '../components/receipts/BulkPaymentReceipt';
 
 const blankChequeDetails = {
   chequeNumber: '',
@@ -26,6 +28,8 @@ export default function PaymentManagement() {
   const [error, setError] = useState('');
   const [memberSearch, setMemberSearch] = useState('');
   const [form, setForm] = useState(null);
+  const [selectedReceipt, setSelectedReceipt] = useState(null);
+  const [receiptLoading, setReceiptLoading] = useState(false);
 
   const fetchTransactions = async () => {
     setLoading(true);
@@ -98,6 +102,37 @@ export default function PaymentManagement() {
       setEditing(true);
     } catch (requestError) {
       setError(requestError.response?.data?.message || 'Could not load this payment for editing.');
+    }
+  };
+
+  const openReceipt = async (transactionId) => {
+    setError('');
+    setReceiptLoading(true);
+    try {
+      const response = await api.get(`/payments/${transactionId}`);
+      const transaction = response.data.transaction;
+      const allocations = response.data.allocations || [];
+
+      if (transaction.isBulk) {
+        setSelectedReceipt({ ...transaction, allocations });
+      } else {
+        const allocation = allocations[0];
+        const member = allocation?.member || transaction.singleMemberId;
+        setSelectedReceipt({
+          ...transaction,
+          totalAmountINR: transaction.formattedTotalAmount,
+          member: {
+            memberId: member?.memberId || '-',
+            fullName: member?.fullName || transaction.payerName,
+            village: member?.village || member?.villageId?.name || ''
+          },
+          installments: allocation?.installments || []
+        });
+      }
+    } catch (requestError) {
+      setError(requestError.response?.data?.message || 'Could not load this payment receipt.');
+    } finally {
+      setReceiptLoading(false);
     }
   };
 
@@ -252,13 +287,23 @@ export default function PaymentManagement() {
                   <td className="px-3 py-2.5 text-right font-mono font-bold">{transaction.formattedTotalAmount}</td>
                   <td className="px-3 py-2.5"><Badge status={transaction.paymentStatus} /></td>
                   <td className="px-3 py-2.5 text-right">
-                    <button
-                      type="button"
-                      onClick={() => openEdit(transaction._id)}
-                      className="inline-flex items-center gap-1 rounded-lg border border-indigo-200 px-2.5 py-1.5 font-bold text-indigo-700 hover:bg-indigo-50"
-                    >
-                      <Pencil className="h-3.5 w-3.5" /> Edit
-                    </button>
+                    <div className="flex justify-end gap-2">
+                      <button
+                        type="button"
+                        disabled={receiptLoading}
+                        onClick={() => openReceipt(transaction._id)}
+                        className="inline-flex items-center gap-1 rounded-lg border border-emerald-200 px-2.5 py-1.5 font-bold text-emerald-700 hover:bg-emerald-50 disabled:opacity-50"
+                      >
+                        <FileText className="h-3.5 w-3.5" /> Receipt
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => openEdit(transaction._id)}
+                        className="inline-flex items-center gap-1 rounded-lg border border-indigo-200 px-2.5 py-1.5 font-bold text-indigo-700 hover:bg-indigo-50"
+                      >
+                        <Pencil className="h-3.5 w-3.5" /> Edit
+                      </button>
+                    </div>
                   </td>
                 </tr>
               ))}
@@ -420,6 +465,18 @@ export default function PaymentManagement() {
               </button>
             </div>
           </form>
+        )}
+      </Modal>
+      <Modal
+        isOpen={Boolean(selectedReceipt)}
+        onClose={() => setSelectedReceipt(null)}
+        title={selectedReceipt?.isBulk ? 'Official Group Payment Receipt' : 'Official Payment Receipt'}
+        maxWidth={selectedReceipt?.isBulk ? 'max-w-5xl' : 'max-w-2xl'}
+      >
+        {selectedReceipt?.isBulk ? (
+          <BulkPaymentReceipt receipt={selectedReceipt} onClose={() => setSelectedReceipt(null)} />
+        ) : (
+          <SinglePaymentReceipt receipt={selectedReceipt} onClose={() => setSelectedReceipt(null)} />
         )}
       </Modal>
     </div>

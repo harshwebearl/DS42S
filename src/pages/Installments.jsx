@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import api from '../api/axiosClient';
 import {
   Layers,
@@ -41,6 +41,8 @@ export default function Installments() {
 
   // Dues generation state
   const [generatingId, setGeneratingId] = useState(null);
+  const [generatedInstallmentIds, setGeneratedInstallmentIds] = useState([]);
+  const generationLock = useRef(false);
   const [genMessage, setGenMessage] = useState('');
 
   useEffect(() => {
@@ -147,7 +149,11 @@ export default function Installments() {
 
   // Generate Dues for this installment
   const handleGenerateDues = async (inst) => {
+    if (generationLock.current) return;
+    generationLock.current = true;
+
     if (!window.confirm(`Generate installment dues of ${inst.formattedAmount} for all eligible members for "${inst.installmentTitle}"? This will post official due records to member ledgers.`)) {
+      generationLock.current = false;
       return;
     }
     setGeneratingId(inst._id);
@@ -155,10 +161,12 @@ export default function Installments() {
     try {
       const res = await api.post(`/installments/${inst._id}/generate-dues`);
       setGenMessage(res.data.message);
+      setGeneratedInstallmentIds((prev) => [...new Set([...prev, inst._id])]);
       await fetchInstallments();
     } catch (err) {
       alert(err.response?.data?.message || 'Error generating dues');
     } finally {
+      generationLock.current = false;
       setGeneratingId(null);
     }
   };
@@ -266,6 +274,8 @@ export default function Installments() {
         ) : (
           installments.map((inst) => {
             const stats = inst.stats || {};
+            const duesGenerated = generatedInstallmentIds.includes(inst._id) ||
+              (inst.eligibleMemberCount > 0 && stats.totalMembers >= inst.eligibleMemberCount);
             return (
               <div
                 key={inst._id}
@@ -287,11 +297,15 @@ export default function Installments() {
                   <div className="flex items-center gap-2">
                     <button
                       onClick={() => handleGenerateDues(inst)}
-                      disabled={generatingId === inst._id}
+                      disabled={generatingId !== null || duesGenerated}
                       className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-emerald-600 text-white text-xs font-bold hover:bg-emerald-700 shadow-2xs transition disabled:opacity-50"
                     >
                       <Play className="h-3.5 w-3.5" />
-                      {generatingId === inst._id ? 'Generating...' : 'Generate Member Dues'}
+                      {generatingId === inst._id
+                        ? 'Generating...'
+                        : duesGenerated
+                          ? 'Dues Generated'
+                          : 'Generate Member Dues'}
                     </button>
                     <button
                       onClick={() => openEditModal(inst)}

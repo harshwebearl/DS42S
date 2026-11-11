@@ -47,6 +47,75 @@ export default function BulkPaymentReceipt({ receipt, onClose }) {
     doc.save(`${allocation.allocationId || receipt.transactionId || 'group-payment'}-receipt.pdf`);
   };
 
+  const downloadMasterReceipt = () => {
+    const doc = new jsPDF();
+    let y = 18;
+
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(15);
+    doc.text('Official Group / Bulk Payment Receipt', 105, y, { align: 'center' });
+    y += 9;
+    doc.setFontSize(11);
+    doc.text('SHREE DASHASHREMALI 42 GNATI SURAKSHA SAMITI', 105, y, { align: 'center' });
+    y += 10;
+
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(10);
+    const addLine = (label, value) => {
+      const lines = doc.splitTextToSize(`${label}: ${value || '-'}`, 178);
+      if (y + lines.length * 5 > 275) {
+        doc.addPage();
+        y = 18;
+      }
+      doc.text(lines, 16, y);
+      y += lines.length * 6;
+    };
+
+    addLine('Master Bulk Transaction ID', receipt.transactionId);
+    addLine('Payment Date', receipt.paymentDate ? new Date(receipt.paymentDate).toLocaleDateString() : '-');
+    addLine('Payer Name', receipt.payerName);
+    addLine('Payer Mobile', receipt.payerMobile);
+    addLine('Payment Mode', receipt.paymentMode);
+    const totalAmountRupees = receipt.totalAmountRupees ?? (Number(receipt.totalAmountPaise || 0) / 100);
+    addLine('Total Received Amount', `Rs. ${Number(totalAmountRupees).toFixed(2)}`);
+    if (receipt.chequeDetails?.chequeNumber) {
+      addLine(
+        'Cheque Particulars',
+        `#${receipt.chequeDetails.chequeNumber} — ${receipt.chequeDetails.bankName || '-'}`
+      );
+    }
+    addLine('Payment Status', receipt.paymentStatus);
+    y += 3;
+    doc.setFont('helvetica', 'bold');
+    doc.text('Member-wise Payment Distribution', 16, y);
+    y += 8;
+    doc.setFont('helvetica', 'normal');
+
+    allocations.forEach((allocation, index) => {
+      const memberName = allocation.member?.fullName || allocation.fullName || 'Member';
+      const memberId = allocation.member?.memberId || allocation.memberId || '-';
+      const installmentNames = allocation.installments?.length
+        ? allocation.installments.map((installment) => installment.installmentTitle).join(', ')
+        : 'No installment linked';
+      const amountRupees = allocation.amountRupees ?? allocation.allocatedAmountRupees ?? (allocation.allocatedAmountPaise / 100);
+      addLine(
+        `${index + 1}. ${memberName} (${memberId})`,
+        `Rs. ${Number(amountRupees || 0).toFixed(2)} — ${installmentNames}`
+      );
+    });
+
+    y += 8;
+    if (y > 275) {
+      doc.addPage();
+      y = 18;
+    }
+    doc.text('Computer generated receipt.', 16, y);
+    doc.text('Authorized Signatory', 194, y + 12, { align: 'right' });
+
+    const fileName = `${receipt.transactionId || 'group-payment'}-receipt.pdf`.replace(/[^\w.-]/g, '_');
+    doc.save(fileName);
+  };
+
   return (
     <div className="space-y-6">
       {/* Printable Master Receipt */}
@@ -199,6 +268,14 @@ export default function BulkPaymentReceipt({ receipt, onClose }) {
 
       {/* Action Buttons */}
       <div className="flex justify-end gap-3 no-print">
+        <button
+          type="button"
+          onClick={downloadMasterReceipt}
+          className="inline-flex items-center gap-2 px-4 py-2 bg-emerald-600 text-white rounded-lg font-semibold text-xs hover:bg-emerald-700 shadow-sm"
+        >
+          <Download className="h-4 w-4" />
+          Download Master PDF
+        </button>
         <button
           type="button"
           onClick={handlePrint}

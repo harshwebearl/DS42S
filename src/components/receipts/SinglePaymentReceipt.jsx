@@ -1,11 +1,71 @@
 import React from 'react';
-import { Printer, CheckCircle, Clock } from 'lucide-react';
+import { jsPDF } from 'jspdf';
+import { Printer, CheckCircle, Clock, Download } from 'lucide-react';
 
 export default function SinglePaymentReceipt({ receipt, onClose }) {
   if (!receipt) return null;
 
   const handlePrint = () => {
     window.print();
+  };
+
+  const handleDownload = () => {
+    const doc = new jsPDF();
+    const left = 16;
+    let y = 18;
+
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(15);
+    doc.text('Official Payment Receipt', 105, y, { align: 'center' });
+    y += 9;
+    doc.setFontSize(11);
+    doc.text('SHREE DASHASHREMALI 42 GNATI SURAKSHA SAMITI', 105, y, { align: 'center' });
+    y += 10;
+
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(10);
+    const addLine = (label, value) => {
+      const lines = doc.splitTextToSize(`${label}: ${value || '-'}`, 178);
+      if (y + lines.length * 5 > 275) {
+        doc.addPage();
+        y = 18;
+      }
+      doc.text(lines, left, y);
+      y += lines.length * 6;
+    };
+
+    addLine('Receipt / Transaction ID', receipt.transactionId);
+    addLine('Payment Date', receipt.paymentDate ? new Date(receipt.paymentDate).toLocaleDateString() : '-');
+    addLine('Member ID', receipt.member?.memberId);
+    addLine('Member Name', receipt.member?.fullName || receipt.payerName);
+    addLine('Village', receipt.member?.village);
+    addLine('Payer Name', receipt.payerName);
+    addLine(
+      'Installment paid to',
+      receipt.installments?.length
+        ? receipt.installments.map((installment) => installment.installmentTitle).join(', ')
+        : 'No installment linked'
+    );
+    addLine('Payment Mode', receipt.paymentMode);
+    if (receipt.chequeDetails?.chequeNumber) {
+      addLine('Cheque No & Bank', `#${receipt.chequeDetails.chequeNumber} (${receipt.chequeDetails.bankName || '-'})`);
+    }
+    if (receipt.referenceNumber) addLine('Ref / UTR Number', receipt.referenceNumber);
+    const amountRupees = receipt.totalAmountPaise != null
+      ? Number(receipt.totalAmountPaise) / 100
+      : receipt.totalAmountINR;
+    addLine(
+      'Total Received Amount',
+      typeof amountRupees === 'number' ? `Rs. ${amountRupees.toFixed(2)}` : amountRupees
+    );
+    addLine('Payment Status', receipt.paymentStatus);
+    y += 12;
+    addLine('Note', 'Computer generated receipt. Valid subject to realization of cheque.');
+    y += 15;
+    doc.text('Authorized Signatory', 194, y, { align: 'right' });
+
+    const fileName = `${receipt.transactionId || 'payment'}-receipt.pdf`.replace(/[^\w.-]/g, '_');
+    doc.save(fileName);
   };
 
   return (
@@ -121,6 +181,14 @@ export default function SinglePaymentReceipt({ receipt, onClose }) {
 
       {/* Action Buttons (Hidden when printing) */}
       <div className="flex justify-end gap-3 no-print">
+        <button
+          type="button"
+          onClick={handleDownload}
+          className="inline-flex items-center gap-2 px-4 py-2 bg-emerald-600 text-white rounded-lg font-semibold text-xs hover:bg-emerald-700 shadow-sm"
+        >
+          <Download className="h-4 w-4" />
+          Download PDF
+        </button>
         <button
           type="button"
           onClick={handlePrint}
