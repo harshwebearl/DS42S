@@ -1,5 +1,6 @@
 import React from 'react';
-import { Printer, CheckCircle, Clock } from 'lucide-react';
+import { Printer, CheckCircle, Clock, Download } from 'lucide-react';
+import { jsPDF } from 'jspdf';
 
 export default function BulkPaymentReceipt({ receipt, onClose }) {
   if (!receipt) return null;
@@ -9,6 +10,42 @@ export default function BulkPaymentReceipt({ receipt, onClose }) {
   };
 
   const allocations = receipt.allocations || [];
+  const downloadAllocationReceipt = (allocation) => {
+    const doc = new jsPDF();
+    const installmentNames = allocation.installments?.length
+      ? allocation.installments.map((installment) => installment.installmentTitle).join(', ')
+      : 'No installment linked';
+    const memberName = allocation.member?.fullName || allocation.fullName || 'Member';
+    const memberId = allocation.member?.memberId || allocation.memberId || '-';
+
+    doc.setFontSize(15);
+    doc.setFont('helvetica', 'bold');
+    doc.text('Official Group Payment Allocation Receipt', 105, 18, { align: 'center' });
+    doc.setFontSize(11);
+    doc.text('SHREE DASHASHREMALI 42 GNATI SURAKSHA SAMITI', 105, 27, { align: 'center' });
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(10);
+    doc.text(`Receipt / Transaction ID: ${receipt.transactionId || '-'}`, 16, 43);
+    doc.text(`Allocation ID: ${allocation.allocationId || '-'}`, 16, 51);
+    doc.text(`Payment Date: ${receipt.paymentDate ? new Date(receipt.paymentDate).toLocaleDateString() : '-'}`, 16, 59);
+    doc.text(`Payer: ${receipt.payerName || '-'}`, 16, 67);
+    doc.text(`Payment Mode: ${receipt.paymentMode || '-'}`, 16, 75);
+    doc.text(`Member: ${memberName} (${memberId})`, 16, 89);
+    doc.text(`Village: ${allocation.member?.village || allocation.village || '-'}`, 16, 97);
+    const installmentLines = doc.splitTextToSize(`Installment paid to: ${installmentNames}`, 178);
+    doc.text(installmentLines, 16, 105);
+    const amountY = 110 + installmentLines.length * 5;
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(13);
+    const amountRupees = allocation.amountRupees ?? allocation.allocatedAmountRupees ?? (allocation.allocatedAmountPaise / 100);
+    doc.text(`Allocated Amount: Rs. ${Number(amountRupees || 0).toFixed(2)}`, 16, amountY);
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(9);
+    doc.text(`Payment Status: ${receipt.paymentStatus || '-'}`, 16, amountY + 12);
+    doc.text('Computer generated receipt.', 16, amountY + 30);
+    doc.text('Authorized Signatory', 156, amountY + 45, { align: 'center' });
+    doc.save(`${allocation.allocationId || receipt.transactionId || 'group-payment'}-receipt.pdf`);
+  };
 
   return (
     <div className="space-y-6">
@@ -77,7 +114,9 @@ export default function BulkPaymentReceipt({ receipt, onClose }) {
                   <th className="py-2.5 px-3">Member ID</th>
                   <th className="py-2.5 px-3">Member Name</th>
                   <th className="py-2.5 px-3">Village</th>
+                  <th className="py-2.5 px-3">Installment paid to</th>
                   <th className="py-2.5 px-3 text-right">Allocated Amount</th>
+                  <th className="py-2.5 px-3 text-center no-print">Receipt</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
@@ -88,20 +127,36 @@ export default function BulkPaymentReceipt({ receipt, onClose }) {
                     <td className="py-2 px-3 font-bold text-slate-900">{alloc.member?.memberId || alloc.memberId}</td>
                     <td className="py-2 px-3 font-semibold text-slate-800">{alloc.member?.fullName || alloc.fullName}</td>
                     <td className="py-2 px-3 text-slate-600">{alloc.member?.village || alloc.village || '-'}</td>
+                    <td className="py-2 px-3 text-slate-600">
+                      {alloc.installments?.length
+                        ? alloc.installments.map((installment) => installment.installmentTitle).join(', ')
+                        : '-'}
+                    </td>
                     <td className="py-2 px-3 text-right font-bold text-indigo-700">
                       {alloc.formattedAmount || `₹${alloc.allocatedAmountRupees || alloc.amountRupees}`}
+                    </td>
+                    <td className="py-2 px-3 text-center no-print">
+                      <button
+                        type="button"
+                        onClick={() => downloadAllocationReceipt(alloc)}
+                        className="inline-flex items-center gap-1 rounded-md border border-indigo-200 px-2 py-1 font-semibold text-indigo-700 hover:bg-indigo-50"
+                      >
+                        <Download className="h-3.5 w-3.5" />
+                        Download
+                      </button>
                     </td>
                   </tr>
                 ))}
               </tbody>
               <tfoot className="bg-slate-100 font-bold border-t border-slate-200 text-xs">
                 <tr>
-                  <td colSpan="5" className="py-2.5 px-3 text-right text-slate-700">
+                  <td colSpan="6" className="py-2.5 px-3 text-right text-slate-700">
                     Grand Total Distributed:
                   </td>
                   <td className="py-2.5 px-3 text-right text-indigo-900 font-black text-sm">
                     {receipt.formattedTotalAmount || `₹${receipt.totalAmountRupees}`}
                   </td>
+                  <td className="no-print" />
                 </tr>
               </tfoot>
             </table>

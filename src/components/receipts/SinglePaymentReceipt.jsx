@@ -55,6 +55,14 @@ export default function SinglePaymentReceipt({ receipt, onClose }) {
 
         {/* Payment Particulars */}
         <div className="space-y-3 py-3 border-b border-slate-200 text-xs">
+          <div className="flex justify-between py-1">
+            <span className="text-slate-600">Installment paid to:</span>
+            <span className="font-bold text-slate-900">
+              {receipt.installments?.length
+                ? receipt.installments.map((installment) => installment.installmentTitle).join(', ')
+                : 'No installment linked'}
+            </span>
+          </div>
           <div className="flex justify-between items-center py-1">
             <span className="text-slate-600">Payment Mode:</span>
             <span className="font-bold uppercase px-2 py-0.5 rounded-sm bg-slate-200 text-slate-800">{receipt.paymentMode}</span>

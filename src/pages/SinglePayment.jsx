@@ -3,6 +3,7 @@ import api from '../api/axiosClient';
 import { fetchAllMembers } from '../utils/memberApi';
 import { CreditCard, Search, CheckCircle2, AlertCircle, Printer, RefreshCw, CheckSquare, Square, ShieldOff } from 'lucide-react';
 import Modal from '../components/common/Modal';
+import IfscInput from '../components/common/IfscInput';
 import SinglePaymentReceipt from '../components/receipts/SinglePaymentReceipt';
 import Badge from '../components/common/Badge';
 
@@ -27,6 +28,7 @@ export default function SinglePayment() {
   const [chequeDetails, setChequeDetails] = useState({
     chequeNumber: '',
     bankName: '',
+    ifscCode: '',
     bankAccountNumber: '',
     chequeDate: new Date().toISOString().split('T')[0]
   });
@@ -643,7 +645,7 @@ export default function SinglePayment() {
 
             {/* Cheque Specific Fields */}
             {paymentMode === 'CHEQUE' ? (
-              <div className="p-4 bg-amber-50/60 rounded-xl border border-amber-200 grid grid-cols-1 sm:grid-cols-3 gap-4">
+              <div className="p-4 bg-amber-50/60 rounded-xl border border-amber-200 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
                 <div>
                   <label className="block font-bold text-slate-700 mb-1">
                     Cheque Number <span className="text-rose-500">*</span>
@@ -655,6 +657,12 @@ export default function SinglePayment() {
                     onChange={(e) => setChequeDetails({ ...chequeDetails, chequeNumber: e.target.value })}
                     placeholder="e.g. 123456"
                     className="w-full px-3 py-2 rounded-lg border border-slate-300 bg-white font-mono"
+                  />
+                </div>
+                <div>
+                  <IfscInput
+                    value={chequeDetails.ifscCode}
+                    onChange={(field, value) => setChequeDetails((current) => ({ ...current, [field]: value }))}
                   />
                 </div>
                 <div>

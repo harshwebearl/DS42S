@@ -18,6 +18,7 @@ import {
   ShieldCheck
 } from 'lucide-react';
 import Modal from '../components/common/Modal';
+import IfscInput from '../components/common/IfscInput';
 import BulkPaymentReceipt from '../components/receipts/BulkPaymentReceipt';
 import Badge from '../components/common/Badge';
 
@@ -37,6 +38,7 @@ export default function BulkPayment() {
   const [chequeDetails, setChequeDetails] = useState({
     chequeNumber: '',
     bankName: '',
+    ifscCode: '',
     bankAccountNumber: '',
     chequeDate: new Date().toISOString().split('T')[0]
   });
@@ -488,6 +490,10 @@ export default function BulkPayment() {
                   className="w-full px-3 py-2 rounded-lg border border-slate-300 font-mono bg-amber-50/50"
                 />
               </div>
+              <IfscInput
+                value={chequeDetails.ifscCode}
+                onChange={(field, value) => setChequeDetails((current) => ({ ...current, [field]: value }))}
+              />
               <div>
                 <label className="block font-bold text-slate-700 mb-1">
                   Bank Name & Branch <span className="text-rose-500">*</span>

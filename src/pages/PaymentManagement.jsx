@@ -4,10 +4,12 @@ import api from '../api/axiosClient';
 import Modal from '../components/common/Modal';
 import Badge from '../components/common/Badge';
 import { fetchAllMembers } from '../utils/memberApi';
+import IfscInput from '../components/common/IfscInput';
 
 const blankChequeDetails = {
   chequeNumber: '',
   bankName: '',
+  ifscCode: '',
   bankAccountNumber: '',
   chequeDate: ''
 };
@@ -316,9 +318,16 @@ export default function PaymentManagement() {
             </div>
             {form.paymentMode === 'CHEQUE' && (
               <div className="grid gap-3 rounded-lg border border-amber-200 bg-amber-50/60 p-3 sm:grid-cols-2 lg:grid-cols-4">
+                <IfscInput
+                  value={form.chequeDetails.ifscCode}
+                  onChange={(key, value) => setForm((current) => ({
+                    ...current,
+                    chequeDetails: { ...current.chequeDetails, [key]: value }
+                  }))}
+                />
                 {[
                   ['chequeNumber', 'Cheque Number'],
-                  ['bankName', 'Bank Name'],
+                  ['bankName', 'Bank Name & Branch'],
                   ['bankAccountNumber', 'Bank Account Number']
                 ].map(([key, label]) => (
                   <label key={key} className="font-bold text-slate-700">{label}
